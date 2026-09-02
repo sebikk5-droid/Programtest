@@ -893,23 +893,39 @@ $("share").onclick=async()=>{
   }
 
   function applyForm(data){
-    // First recreate exactly the number of saved days.
-    if(data.__visibleDays && typeof visibleDays==="number"){
-      while(visibleDays < Number(data.__visibleDays)){
-        const add=document.getElementById("addDay");
-        if(!add) break;
-        add.click();
-      }
+    // Rebuild the day area to EXACTLY match the saved report.
+    // This is important when a 1-day report is opened while 4 days are
+    // currently visible: extra days must be removed, not kept.
+    const target=Math.max(1,Math.min(6,Number(data.__visibleDays)||1));
+    const times=document.getElementById("times");
+    const addBtn=document.getElementById("addDay");
+
+    // Remove all existing day boxes except day 1.
+    times.querySelectorAll("[data-daybox]").forEach(box=>{
+      if(box.getAttribute("data-daybox")!=="1") box.remove();
+    });
+    visibleDays=1;
+
+    // Recreate exactly target-1 additional days.
+    while(visibleDays<target){
+      const d=visibleDays+1;
+      addBtn.insertAdjacentHTML("beforebegin",dayTemplate(d));
+      initQuarterTimeSelects(times);
+      const box=times.querySelector(`[data-daybox="${d}"]`);
+      if(box) box.setAttribute("data-day-active","1");
+      visibleDays=d;
     }
 
+    if(addBtn) addBtn.style.display=visibleDays>=6?"none":"";
+
+    // Restore all saved values only after the exact day structure exists.
     Object.keys(data).forEach(key=>{
       if(key==="__visibleDays" || /_collapsed$/.test(key)) return;
 
       let el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
       if(!el) el=document.getElementById(key);
 
-      // Dynamic day fields.
-      let m=key.match(/^day(\d+)_(date|overnight|reisezeit_(out|back))$/);
+      const m=key.match(/^day(\d+)_(date|overnight|reisezeit_(out|back))$/);
       if(!el && m){
         const d=m[1], type=m[2];
         const box=document.querySelector(`[data-daybox="${d}"]`);
@@ -937,7 +953,7 @@ $("share").onclick=async()=>{
       }
     });
 
-    // Re-run calculations only after every saved value has been restored.
+    bindTimeInputs();
     if(typeof recalcTimes==="function") recalcTimes();
   }
   function refresh(){
