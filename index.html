@@ -1154,27 +1154,53 @@ $("share").onclick=async()=>{
 })();
 </script>
 
+
+
 <script>
 (function(){
-  function mergePdfCreateAndSave(){
-    const btn=[...document.querySelectorAll("button")].find(b=>/PDF erstellen & speichern/i.test(b.textContent||""));
-    if(!btn || btn.dataset.mergedPdf) return;
-    btn.dataset.mergedPdf="1";
-    const old=btn.onclick;
-    btn.onclick=async function(ev){
-      if(old) await old.call(this,ev);
-      setTimeout(()=>{
-        if(typeof lastPdfBlob!=="undefined" && lastPdfBlob && typeof savePdf==="function"){
-          savePdf();
-        }else if(typeof setupSaveAsPdf==="function"){
-          const saveBtn=document.getElementById("savePdf");
-          if(saveBtn && saveBtn!==btn) saveBtn.click();
+  function installCombined(){
+    const btn=document.getElementById("generate");
+    if(!btn || btn.dataset.combinedInstalled==="1") return;
+    btn.dataset.combinedInstalled="1";
+
+    btn.addEventListener("click",function(){
+      let tries=0;
+      const finish=async()=>{
+        if(typeof lastPdfBlob!=="undefined" && lastPdfBlob){
+          const filename="Service-Bericht.pdf";
+          try{
+            if(window.showSaveFilePicker){
+              const handle=await window.showSaveFilePicker({
+                suggestedName:filename,
+                types:[{description:"PDF-Datei",accept:{"application/pdf":[".pdf"]}}]
+              });
+              const w=await handle.createWritable();
+              await w.write(lastPdfBlob);
+              await w.close();
+              const s=document.getElementById("status");
+              if(s) s.textContent="PDF wurde gespeichert.";
+              return;
+            }
+          }catch(e){
+            if(e && e.name==="AbortError") return;
+          }
+          const url=URL.createObjectURL(lastPdfBlob);
+          const a=document.createElement("a");
+          a.href=url; a.download=filename; a.style.display="none";
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(()=>URL.revokeObjectURL(url),5000);
+          const s=document.getElementById("status");
+          if(s) s.textContent="PDF zum Speichern geöffnet.";
+          return;
         }
-      },100);
-    };
+        if(++tries<150) setTimeout(finish,100);
+      };
+      setTimeout(finish,150);
+    });
   }
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",mergePdfCreateAndSave);
-  else mergePdfCreateAndSave();
+  if(document.readyState==="loading")
+    document.addEventListener("DOMContentLoaded",installCombined);
+  else installCombined();
 })();
 </script>
 </body>
