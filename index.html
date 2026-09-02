@@ -188,8 +188,7 @@ const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signd
 
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
 let visibleDays=1;
-// Time pickers use 15-minute steps (00/15/30/45).
-function quarterTimeSelect(){
+function quarterTimeOptions(){
   let o='<option value="">--:--</option>';
   for(let h=0;h<24;h++){
     for(const m of [0,15,30,45]){
@@ -201,9 +200,10 @@ function quarterTimeSelect(){
 }
 function initQuarterTimeSelects(root=document){
   root.querySelectorAll("select.quarter-time").forEach(s=>{
-    if(!s.options.length) s.innerHTML=quarterTimeSelect();
+    if(!s.options.length) s.innerHTML=quarterTimeOptions();
   });
 }
+
 function dayTemplate(d){
   return `
   <div class="daybox" data-daybox="${d}">
@@ -265,8 +265,8 @@ function dayTemplate(d){
 $("times").innerHTML=dayTemplate(1)+`
   <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Weiteren Tag hinzufügen</button>
 `;
-document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
 initQuarterTimeSelects($("times"));
+document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
 $("addDay").onclick=()=>{
   if(visibleDays>=6)return;
   const d=visibleDays+1;
@@ -275,6 +275,9 @@ $("addDay").onclick=()=>{
   if(box)box.setAttribute("data-day-active","1");
   visibleDays=d;
   bindTimeInputs();
+document.getElementById("times").addEventListener("change",e=>{
+  if(e.target.matches("select.quarter-time")) recalcTimes();
+});
 
   // Same automatic customer data as day 1.
   const r=customerRoute();
@@ -289,8 +292,8 @@ $("addDay").onclick=()=>{
 
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
-
-  initQuarterTimeSelects($("times"));};
+  initQuarterTimeSelects($("times"));
+};
 
 
 // Day controls: collapse or remove a day that was added by mistake.
@@ -551,13 +554,11 @@ function pdfCheck(form,name,on){
   }catch(e){}
 }
 function bindTimeInputs(){
-  // Time fields are <select> controls (15-minute steps), while pause/KM
-  // fields remain inputs. Bind both so automatic calculations work again.
-  document.querySelectorAll("#times input, #times select").forEach(el=>{
+  document.querySelectorAll("#times input").forEach(el=>{
     if(el.dataset.bound==="1") return;
     el.dataset.bound="1";
 
-    const handleTimeChange=()=>{
+    el.addEventListener("input",()=>{
       const key=el.dataset.k||"";
       const box=el.closest("[data-daybox]");
       const boxDay=box ? parseInt(box.getAttribute("data-daybox"),10) : 1;
@@ -659,9 +660,6 @@ function bindTimeInputs(){
     const recalcOverride=()=>el.dispatchEvent(new Event("input",{bubbles:true}));
     el.addEventListener("change",recalcOverride);
     el.addEventListener("blur",recalcOverride);
-  };
-    el.addEventListener("input",handleTimeChange);
-    el.addEventListener("change",handleTimeChange);
   });
 }
 
