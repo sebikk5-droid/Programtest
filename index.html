@@ -171,7 +171,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 <div id="status"></div>
 </main>
-<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button type="button" id="saveCopyLocation" onclick="saveCopyToChosenLocation()">Kopie speichern unter…</button><button class="go" id="share" disabled>📎 PDF teilen</button><button class="go" id="savePdf" disabled>💾 PDF speichern</button></div>
+<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button class="go" id="share" disabled>📎 PDF teilen</button><button class="go" id="savePdf" disabled>💾 PDF speichern</button></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js">
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   const k="pdf_"+el.id;
@@ -1099,7 +1099,8 @@ $("share").onclick=async()=>{
         return;
       }
 
-      const defaultName="Service-Bericht.pdf";
+      const defaultName=(document.getElementById("order")?.value||"Service-Bericht").trim()
+        .replace(/[\\/:*?"<>|]/g,"_")+".pdf";
 
       try{
         if(window.showSaveFilePicker){
@@ -1152,51 +1153,6 @@ $("share").onclick=async()=>{
   else
     setupSaveAsPdf();
 })();
-</script>
-
-<script>
-async function saveCopyToChosenLocation(){
-  const nameInput=document.querySelector('[name="bericht_name"], #berichtName, #fileName, input[type="text"][placeholder*="Name"]');
-  const defaultName=(nameInput?.value||"Servicebericht").trim().replace(/[\\/:*?"<>|]/g,"_")||"Servicebericht";
-  const filename=defaultName.toLowerCase().endsWith(".pdf")?defaultName:defaultName+".pdf";
-
-  // Generate the same PDF as the existing PDF button if its generator is exposed.
-  let blob=null;
-  if(typeof generatePDFBlob==="function") blob=await generatePDFBlob();
-  else if(typeof createPDFBlob==="function") blob=await createPDFBlob();
-  else if(typeof makePDFBlob==="function") blob=await makePDFBlob();
-
-  if(!blob){
-    // Use the existing PDF action to prepare the current PDF, then fall back
-    // to a normal browser download if no Blob generator is exposed.
-    const pdfBtn=[...document.querySelectorAll("button")].find(b=>/pdf/i.test(b.textContent));
-    if(pdfBtn){ pdfBtn.click(); return; }
-    alert("PDF konnte nicht vorbereitet werden.");
-    return;
-  }
-
-  if("showSaveFilePicker" in window){
-    try{
-      const handle=await window.showSaveFilePicker({
-        suggestedName:filename,
-        types:[{description:"PDF-Datei",accept:{"application/pdf":[".pdf"]}}]
-      });
-      const writable=await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return;
-    }catch(e){
-      if(e && e.name==="AbortError") return;
-    }
-  }
-
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download=filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
-}
 </script>
 </body>
 </html>
