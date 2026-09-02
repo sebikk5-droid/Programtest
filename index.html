@@ -58,7 +58,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <div><label>Kilometer gesamt</label><input id="kmTotal" readonly></div>
 <div><label>Gesamtzeit</label><input id="allTotal" readonly></div>
 </div>
-<div class="muted">Wpisz godzinę „von” i „bis”. Czasy oraz kilometry są liczone automatycznie.</div></section>
+<div class="muted">Jeden Tag werden zwei Zeilen im Bericht verwendet: 1. Anfahrt + Arbeit, 2. Rückfahrt. Pausen werden automatisch abgezogen.</div></section>
 
 <section class="card"><h2>Podpis</h2>
 <div class="grid"><div><label>Auftrags-Nr.</label><input id="order"></div><div><label>Techniker</label><input id="tech" value="S.Pawlina"></div>
@@ -73,11 +73,29 @@ const $=id=>document.getElementById(id); let companies=[];
 const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signdate").value=today;
 
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
-for(let i=1;i<=8;i++) $("times").insertAdjacentHTML("beforeend",`<div class="row">
-<input type="date" data-k="Datum${i}"><input placeholder="Reise von" data-k="RZstart${i}">
-<input placeholder="Reise bis" data-k="RZende${i}"><input placeholder="Arbeit von" data-k="AZstart${i}">
-<input placeholder="Arbeit bis" data-k="AZende${i}"><input inputmode="decimal" placeholder="Kilometer" data-k="Kilometer${i}">
-</div>`);
+for(let d=1;d<=6;d++){
+  $("times").insertAdjacentHTML("beforeend",`
+  <div style="border-top:1px solid #ddd;padding-top:10px;margin-top:10px">
+    <h3 style="font-size:15px;margin:0 0 6px">Tag ${d}</h3>
+    <label>Datum</label><input type="date" data-day="${d}" class="daydate">
+    <div class="row">
+      <input placeholder="Anfahrt von" data-k="RZstart${(d*2)-1}">
+      <input placeholder="Anfahrt bis" data-k="RZende${(d*2)-1}">
+      <input placeholder="Arbeit von" data-k="AZstart${(d*2)-1}">
+      <input placeholder="Arbeit bis" data-k="AZende${(d*2)-1}">
+      <input inputmode="decimal" placeholder="km Anfahrt" data-k="Kilometer${(d*2)-1}">
+      <input placeholder="Pause Arbeit" data-k="PauseAZ${(d*2)-1}">
+    </div>
+    <div class="row">
+      <input placeholder="Rückfahrt von" data-k="RZstart${d*2}">
+      <input placeholder="Rückfahrt bis" data-k="RZende${d*2}">
+      <input placeholder="Pause Rückfahrt" data-k="PauseRZ${d*2}">
+      <input inputmode="decimal" placeholder="km Rückfahrt" data-k="Kilometer${d*2}">
+      <input disabled placeholder="Arbeitszeit">
+      <input disabled placeholder="Reisezeit">
+    </div>
+  </div>`);
+}
 
 fetch("companies.json").then(r=>r.json()).then(x=>{
 companies=x; $("company").innerHTML='<option value="">— wybierz firmę —</option>'+x.map((c,i)=>`<option value="${i}">${c.firma}</option>`).join("");
@@ -88,52 +106,39 @@ function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
 function ls(t){return t.split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean)}
 
 function minutesBetween(a,b){
-  if(!a||!b) return 0;
-  const pa=a.trim().split(":").map(Number), pb=b.trim().split(":").map(Number);
-  if(pa.length<2||pb.length<2||pa.some(Number.isNaN)||pb.some(Number.isNaN)) return 0;
-  let x=pa[0]*60+pa[1], y=pb[0]*60+pb[1];
-  if(y<x) y+=24*60;
-  return y-x;
+  if(!a||!b)return 0;
+  const pa=a.trim().split(":").map(Number),pb=b.trim().split(":").map(Number);
+  if(pa.length<2||pb.length<2||pa.some(Number.isNaN)||pb.some(Number.isNaN))return 0;
+  let x=pa[0]*60+pa[1],y=pb[0]*60+pb[1];if(y<x)y+=1440;return y-x;
 }
-function fmtMin(m){
-  m=Math.max(0,Math.round(m));
-  return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+function pauseMinutes(v){
+  if(!v)return 0;
+  const n=v.trim().match(/^(\\d{1,2}):(\\d{2})$/);
+  if(n)return (+n[1])*60+(+n[2]);
+  const x=parseFloat(v.replace(",",".")); return Number.isFinite(x)?Math.round(x*60):0;
 }
+function fmtMin(m){m=Math.max(0,Math.round(m));return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");}
 function recalcTimes(){
-  let travel=0, work=0, km=0;
-  document.querySelectorAll(".row").forEach(row=>{
-    const vals=[...row.querySelectorAll("input")];
-    if(vals.length<6) return;
-    travel += minutesBetween(vals[1].value, vals[2].value);
-    work += minutesBetween(vals[3].value, vals[4].value);
-    km += parseFloat((vals[5].value||"").replace(",","."))||0;
-  });
-  $("travelTotal").value=fmtMin(travel);
-  $("workTotal").value=fmtMin(work);
-  $("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
-  $("allTotal").value=fmtMin(travel+work);
+  let travel=0,work=0,km=0;
+  for(let d=1;d<=6;d++){
+    const a=(d*2)-1,b=d*2;
+    const q=k=>document.querySelector(`[data-k="${k}"]`);
+    const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`)?.value||""));
+    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
+    const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value));
+    travel+=rt+rr;work+=wt;
+    km+=(parseFloat((q(`Kilometer${a}`).value||"").replace(",","."))||0);
+    km+=(parseFloat((q(`Kilometer${b}`).value||"").replace(",","."))||0);
+    const rows=document.querySelectorAll("#times .row");
+    const row1=rows[(d-1)*2],row2=rows[(d-1)*2+1];
+    if(row1) row1.querySelectorAll("input")[6] && (row1.querySelectorAll("input")[6].value=fmtMin(rt));
+    if(row2) row2.querySelectorAll("input")[5] && (row2.querySelectorAll("input")[5].value=fmtMin(rr));
+  }
+  $("travelTotal").value=fmtMin(travel);$("workTotal").value=fmtMin(work);
+  $("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");$("allTotal").value=fmtMin(travel+work);
 }
 document.querySelectorAll("#times input").forEach(el=>el.addEventListener("input",recalcTimes));
 recalcTimes();
-
-
-let lastPdfBlob=null, lastPdfFile=null;
-$("share").onclick=async()=>{
-  if(!lastPdfBlob) return;
-  try{
-    const file=new File([lastPdfBlob],"Service-Bericht.pdf",{type:"application/pdf"});
-    lastPdfFile=file;
-    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
-      await navigator.share({title:"Service-Bericht",text:"Service-Bericht PDF",files:[file]});
-    }else{
-      const u=URL.createObjectURL(lastPdfBlob);
-      const a=document.createElement("a");a.href=u;a.download="Service-Bericht.pdf";a.click();
-      setTimeout(()=>URL.revokeObjectURL(u),2000);
-    }
-  }catch(e){
-    if(e.name!=="AbortError") $("status").textContent="Udostępnianie nie powiodło się: "+e.message;
-  }
-};
 
 $("generate").onclick=async()=>{
 $("status").textContent="Generuję PDF…";
@@ -150,19 +155,23 @@ set(form,"Name Unterschrift Kunde",$("customersign").value);
 let r=ls($("remarks").value);for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,r[i-1]||"");
 let p=ls($("parts").value);for(let i=1;i<=4;i++)set(form,"Ersatzteile "+i,p[i-1]||"");
 let km=0, travel=0, work=0;
-document.querySelectorAll("[data-k]").forEach(el=>{
-  let k=el.dataset.k,v=el.value;
-  if(k.startsWith("Datum")) v=v?v.split("-").reverse().join("."):"";
-  set(form,k,v);
-  if(k.startsWith("Kilometer")) km+=(parseFloat((el.value||"").replace(",","."))||0);
-});
-document.querySelectorAll("#times .row").forEach(row=>{
-  const vals=[...row.querySelectorAll("input")];
-  if(vals.length>=6){
-    travel+=minutesBetween(vals[1].value,vals[2].value);
-    work+=minutesBetween(vals[3].value,vals[4].value);
-  }
-});
+for(let d=1;d<=6;d++){
+  const a=(d*2)-1,b=d*2;
+  const q=k=>document.querySelector(`[data-k="${k}"]`);
+  const day=document.querySelector(`[data-day="${d}"]`);
+  const date=day&&day.value?day.value.split("-").reverse().join("."):"";
+  set(form,`Datum${a}`,date);
+  set(form,`Datum${b}`,date);
+  ["RZstart","RZende","AZstart","AZende","Kilometer","PauseAZ"].forEach(k=>set(form,`${k}${a}`,q(`${k}${a}`).value));
+  ["RZstart","RZende","Kilometer","PauseRZ"].forEach(k=>set(form,`${k}${b}`,q(`${k}${b}`).value));
+  const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value||""));
+  const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value||""));
+  const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value||""));
+  set(form,`RZ${a}`,fmtMin(rt));set(form,`AZ${a}`,fmtMin(wt));set(form,`RZ${b}`,fmtMin(rr));
+  km+=(parseFloat((q(`Kilometer${a}`).value||"").replace(",","."))||0);
+  km+=(parseFloat((q(`Kilometer${b}`).value||"").replace(",","."))||0);
+  travel+=rt+rr;work+=wt;
+}
 set(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","));
 set(form,"Reisezeit gesamt",fmtMin(travel));
 set(form,"Arbeitszeit gesamt",fmtMin(work));
@@ -170,10 +179,7 @@ set(form,"Gesamtzeit",fmtMin(travel+work));
 form.updateFieldAppearances();form.flatten();let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("share").disabled=false;
-const url=URL.createObjectURL(lastPdfBlob);
-let a=document.createElement("a");a.href=url;a.download="Service-Bericht.pdf";a.click();
-setTimeout(()=>URL.revokeObjectURL(url),2000);
-$("status").textContent="Gotowe — PDF zapisany. Możesz teraz kliknąć „📎 Udostępnij PDF”.";
+$("status").textContent="Gotowe — PDF jest przygotowany. Kliknij „📎 Udostępnij PDF”, aby zapisać lub wysłać jeden plik.";
 }catch(e){$("status").textContent="Błąd: "+e.message}
 };
 </script>
