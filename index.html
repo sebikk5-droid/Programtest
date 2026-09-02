@@ -250,6 +250,14 @@ $("times").innerHTML=dayTemplate(1)+`
   <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Weiteren Tag hinzufügen</button>
 `;
 document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
+function syncAddDayButton(){
+  const btn=$("addDay");
+  if(!btn)return;
+  const count=document.querySelectorAll("[data-daybox]").length;
+  visibleDays=count||1;
+  btn.style.display=visibleDays>=6?"none":"block";
+}
+syncAddDayButton();
 $("addDay").onclick=()=>{
   if(visibleDays>=6)return;
   const d=visibleDays+1;
@@ -271,7 +279,7 @@ $("addDay").onclick=()=>{
   if(pause && pause.value==="")pause.value="0";
 
   recalcTimes();
-  if(visibleDays>=6)$("addDay").style.display="none";
+  syncAddDayButton();
 };
 
 
@@ -338,7 +346,7 @@ document.addEventListener("click",function(e){
     visibleDays=boxes.length;
     bindTimeInputs();
     recalcTimes();
-    if($("addDay"))$("addDay").style.display=visibleDays>=6?"none":"block";
+    syncAddDayButton();
   }
 });
 
@@ -830,6 +838,7 @@ $("share").onclick=async()=>{
 
     // Re-run calculations only after every saved value has been restored.
     if(typeof recalcTimes==="function") recalcTimes();
+    syncAddDayButton();
   }
   function refresh(){
     const sel=document.getElementById("historySelect");
