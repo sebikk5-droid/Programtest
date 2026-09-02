@@ -235,34 +235,22 @@ document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1")
 $("addDay").onclick=()=>{
   if(visibleDays>=6)return;
   const d=visibleDays+1;
-
   $("addDay").insertAdjacentHTML("beforebegin",dayTemplate(d));
   const box=document.querySelector(`[data-daybox="${d}"]`);
-  if(box) box.setAttribute("data-day-active","1");
+  if(box)box.setAttribute("data-day-active","1");
   visibleDays=d;
-
   bindTimeInputs();
 
-  // Same defaults as day 1, but scoped to the newly created day.
+  // Same automatic customer data as day 1.
   const r=customerRoute();
-  const rowOut=d*2-1, rowBack=d*2;
-  const outStart=box?.querySelector(`[data-k="RZstart${rowOut}"]`);
-  const outEnd=box?.querySelector(`[data-k="RZende${rowOut}"]`);
-  const backStart=box?.querySelector(`[data-k="RZstart${rowBack}"]`);
-  const backEnd=box?.querySelector(`[data-k="RZende${rowBack}"]`);
-  const kmOut=box?.querySelector(`[data-k="Kilometer${rowOut}"]`);
-  const kmBack=box?.querySelector(`[data-k="Kilometer${rowBack}"]`);
-  const pauseBack=box?.querySelector(`[data-k="PauseRZ${rowBack}"]`);
-
+  const kmOut=box?.querySelector(`[data-k="Kilometer${d*2-1}"]`);
+  const kmBack=box?.querySelector(`[data-k="Kilometer${d*2}"]`);
+  const pause=box?.querySelector(`[data-k="PauseRZ${d*2}"]`);
   if(r.km){
-    if(kmOut) kmOut.value=r.km;
-    if(kmBack) kmBack.value=r.km;
+    if(kmOut)kmOut.value=r.km;
+    if(kmBack)kmBack.value=r.km;
   }
-  if(pauseBack) pauseBack.value="45";
-
-  // Do not invent a clock time. Once the user enters either end of a
-  // travel interval, the customer-list duration fills the other side.
-  // Work-time links are handled by the generic input handler below.
+  if(pause)pause.value="45";
 
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
@@ -364,15 +352,16 @@ fetch("companies.json").then(r=>{
     if($("street")) $("street").value=a[0]||"";
     if($("city")) $("city").value=a[1]||"";
     applyCustomerRouteDay1();
-    for(let d=2; d<=visibleDays; d++){
+    for(let d=2;d<=visibleDays;d++){
       const box=document.querySelector(`[data-daybox="${d}"]`);
       const a=box?.querySelector(`[data-k="Kilometer${d*2-1}"]`);
       const b=box?.querySelector(`[data-k="Kilometer${d*2}"]`);
       const p=box?.querySelector(`[data-k="PauseRZ${d*2}"]`);
       const r=customerRoute();
-      if(r.km){ if(a)a.value=r.km; if(b)b.value=r.km; }
+      if(r.km){if(a)a.value=r.km;if(b)b.value=r.km;}
       if(p)p.value="45";
     }
+    recalcTimes();
   };
 }).catch(err=>{
   console.error("companies.json:",err);
@@ -410,29 +399,25 @@ function recalcTimes(){
     const a=d*2-1,b=d*2;
     const q=k=>document.querySelector(`[data-k="${k}"]`)||{value:""};
 
-    const overrideOut = d===1 ? document.querySelector('[data-route-override="out"]') : null;
-    const overrideBack = d===1 ? document.querySelector('[data-route-override="back"]') : null;
-    const routeBase = customerRoute();
-    const outMinutes = (overrideOut && overrideOut.value!=="")
-      ? Math.max(0,parseInt(overrideOut.value,10)||0)
-      : routeBase.minutes;
-    const backMinutes = (overrideBack && overrideBack.value!=="")
-      ? Math.max(0,parseInt(overrideBack.value,10)||0)
-      : routeBase.minutes;
+    const box=document.querySelector(`[data-daybox="${d}"]`);
+    const overrideOut=box?.querySelector('[data-route-override="out"]');
+    const overrideBack=box?.querySelector('[data-route-override="back"]');
+    const routeBase=customerRoute();
+    const outMinutes=(overrideOut && overrideOut.value!=="")
+      ? Math.max(0,parseInt(overrideOut.value,10)||0) : routeBase.minutes;
+    const backMinutes=(overrideBack && overrideBack.value!=="")
+      ? Math.max(0,parseInt(overrideBack.value,10)||0) : routeBase.minutes;
 
     const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value));
     const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
     const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value));
     travel+=rt+rr; work+=wt;
-
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
 
     const sc=(name,val)=>{const el=document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
     sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
 
-    // Keep the effective duration available to the auto-time handler.
-    const box=document.querySelector(`[data-daybox="${d}"]`);
     if(box){
       box.dataset.routeOutMinutes=String(outMinutes);
       box.dataset.routeBackMinutes=String(backMinutes);
@@ -443,6 +428,7 @@ function recalcTimes(){
   if($("kmTotal"))$("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
   if($("allTotal"))$("allTotal").value=fmtMin(travel+work);
 }
+
 // Auswahlfelder: innerhalb jeder Gruppe nur eine Option gleichzeitig.
 document.querySelectorAll('#choices input[type="checkbox"][name]').forEach(cb=>{
   cb.addEventListener('change',()=>{
@@ -466,100 +452,82 @@ function bindTimeInputs(){
 
     el.addEventListener("input",()=>{
       const key=el.dataset.k||"";
-      const override=el.dataset.routeOverride;
       const m=key.match(/^(RZstart|RZende|AZstart|AZende)(\d+)$/);
-      const row=m ? parseInt(m[2],10) : 0;
-      const d=row ? Math.ceil(row/2) : 1;
-      const outRow=d*2-1, backRow=d*2;
-
-      const field=(name,rowNo)=>document.querySelector(`[data-k="${name}${rowNo}"]`);
+      const row=m?parseInt(m[2],10):0;
+      const d=row?Math.ceil(row/2):1;
+      const outRow=d*2-1,backRow=d*2;
+      const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
       const box=document.querySelector(`[data-daybox="${d}"]`);
-
-      // Manual travel-time override, scoped to this day.
-      if(override==="out" || override==="back"){
-        const r=customerRoute();
-        const val=Math.max(0,parseInt(el.value,10)||0);
-        if(r.minutes){
-          if(override==="out"){
-            const a1=field("RZstart",outRow), a2=field("RZende",outRow);
-            if(a1&&a2){
-              if(a2.value) a1.value=addMinutesToTime(a2.value,-val);
-              else if(a1.value) a2.value=addMinutesToTime(a1.value,val);
-            }
-          }else{
-            const b1=field("RZstart",backRow), b2=field("RZende",backRow);
-            const p=field("PauseRZ",backRow);
-            if(p)p.value="45";
-            if(b1&&b2){
-              if(b1.value)b2.value=addMinutesToTime(b1.value,val+45);
-              else if(b2.value)b1.value=addMinutesToTime(b2.value,-(val+45));
-            }
-          }
-        }
-        recalcTimes();
-        return;
-      }
-
       const r=customerRoute();
 
-      // Travel interval for every day.
-      if(m && (m[1]==="RZstart" || m[1]==="RZende") && r.minutes){
-        const a1=field("RZstart",outRow), a2=field("RZende",outRow);
-        const b1=field("RZstart",backRow), b2=field("RZende",backRow);
-        const p=field("PauseRZ",backRow);
-
-        if(row===outRow && a1&&a2 && el.value){
-          const duration=r.minutes;
-          if(el===a1) a2.value=addMinutesToTime(el.value,duration);
-          else a1.value=addMinutesToTime(el.value,-duration);
-
-          // Ankunft -> Arbeitsbeginn
+      // EXACTLY the day-1 "Reisezeit ändern" behavior, scoped to this day.
+      if(el.dataset.routeOverride==="out" || el.dataset.routeOverride==="back"){
+        const val=Math.max(0,parseInt(el.value,10)||0);
+        if(el.dataset.routeOverride==="out"){
+          const a1=field("RZstart",outRow),a2=field("RZende",outRow);
+          if(a1&&a2&&val>=0){
+            if(a2.value)a1.value=addMinutesToTime(a2.value,-val);
+            else if(a1.value)a2.value=addMinutesToTime(a1.value,val);
+          }
           const az=field("AZstart",outRow);
-          if(az && a2.value && az.dataset.manual!=="1") az.value=a2.value;
+          if(az&&a2?.value&&az.dataset.manual!=="1")az.value=a2.value;
+        }else{
+          const b1=field("RZstart",backRow),b2=field("RZende",backRow);
+          const pause=field("PauseRZ",backRow);
+          if(pause)pause.value="45";
+          if(b1&&b2&&val>=0){
+            if(b1.value)b2.value=addMinutesToTime(b1.value,val+45);
+            else if(b2.value)b1.value=addMinutesToTime(b2.value,-(val+45));
+          }
+          const azEnd=field("AZende",outRow);
+          if(azEnd&&b1?.value&&azEnd.dataset.manual!=="1")azEnd.value=b1.value;
         }
+        recalcTimes(); return;
+      }
 
-        if(row===backRow && b1&&b2 && el.value){
+      // EXACTLY the day-1 travel pair logic, for any day.
+      if(m && (m[1]==="RZstart" || m[1]==="RZende") && r.minutes){
+        const a1=field("RZstart",outRow),a2=field("RZende",outRow);
+        const b1=field("RZstart",backRow),b2=field("RZende",backRow);
+        if(row===outRow && a1&&a2&&el.value){
+          const duration=r.minutes;
+          if(el===a1)a2.value=addMinutesToTime(el.value,duration);
+          else a1.value=addMinutesToTime(el.value,-duration);
+          const az=field("AZstart",outRow);
+          if(az&&a2.value&&az.dataset.manual!=="1")az.value=a2.value;
+        }
+        if(row===backRow && b1&&b2&&el.value){
           const duration=r.minutes+45;
-          if(p)p.value="45";
           if(el===b1)b2.value=addMinutesToTime(el.value,duration);
           else b1.value=addMinutesToTime(el.value,-duration);
+          const pause=field("PauseRZ",backRow);
+          if(pause)pause.value="45";
         }
       }
 
-      // Ankunft -> Arbeitsbeginn for every day.
+      // EXACTLY the day-1 work-time links, for any day.
       if(key===`RZende${outRow}`){
         const az=field("AZstart",outRow);
-        if(az && el.value && az.dataset.manual!=="1") az.value=el.value;
+        if(az&&el.value&&az.dataset.manual!=="1")az.value=el.value;
       }
-
-      // Arbeitsende -> Rückfahrt-Abfahrt for every day.
       if(key===`AZende${outRow}`){
-        const dep=field("RZstart",backRow);
-        if(dep && el.value && dep.dataset.manual!=="1"){
-          dep.value=el.value;
-          if(r.minutes){
-            const arr=field("RZende",backRow);
-            const p=field("PauseRZ",backRow);
-            if(p)p.value="45";
-            if(arr)arr.value=addMinutesToTime(el.value,r.minutes+45);
-          }
+        const abreise=field("RZstart",backRow);
+        if(abreise&&el.value&&abreise.dataset.manual!=="1"){
+          abreise.value=el.value;
+          const ankunft=field("RZende",backRow);
+          const pause=field("PauseRZ",backRow);
+          if(pause)pause.value="45";
+          if(ankunft&&r.minutes)ankunft.value=addMinutesToTime(el.value,r.minutes+45);
         }
       }
-
-      // If return departure is edited, recalculate return arrival.
-      if(key===`RZstart${backRow}` && el.value && r.minutes){
-        const arr=field("RZende",backRow);
-        const p=field("PauseRZ",backRow);
-        if(p)p.value="45";
-        if(arr)arr.value=addMinutesToTime(el.value,r.minutes+45);
-
-        const azEnd=field("AZende",outRow);
-        if(azEnd && azEnd.dataset.manual!=="1") azEnd.value=el.value;
+      if(key===`RZstart${backRow}`&&el.value&&r.minutes){
+        const ankunft=field("RZende",backRow);
+        const pause=field("PauseRZ",backRow);
+        if(pause)pause.value="45";
+        if(ankunft)ankunft.value=addMinutesToTime(el.value,r.minutes+45);
       }
 
-      if(key===`AZstart${outRow}` || key===`AZende${outRow}`)
-        el.dataset.manual="1";
-
+      if(key===`AZstart${outRow}`||key===`AZende${outRow}`)el.dataset.manual="1";
       recalcTimes();
     });
   });
