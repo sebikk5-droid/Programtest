@@ -200,9 +200,7 @@ function quarterTimeOptions(){
 }
 function initQuarterTimeSelects(root=document){
   root.querySelectorAll("select.quarter-time").forEach(s=>{
-    const value=s.value;
     if(!s.options.length) s.innerHTML=quarterTimeOptions();
-    if(value) s.value=value;
   });
 }
 
@@ -278,10 +276,53 @@ $("addDay").onclick=()=>{
   visibleDays=d;
   bindTimeInputs();
 document.getElementById("times").addEventListener("change",e=>{
-  if(e.target.matches("select.quarter-time")){
-    recalcTimes();
-    bindTimeInputs();
+  const el=e.target;
+  if(!el.matches("select.quarter-time")) return;
+
+  const key=el.dataset.k||"";
+  const m=key.match(/^(RZstart|RZende|AZstart|AZende)(\d+)$/);
+  const row=m?parseInt(m[2],10):0;
+  const box=el.closest("[data-daybox]");
+  const d=row?Math.ceil(row/2):parseInt(box?.dataset.daybox||"1",10);
+  const outRow=d*2-1, backRow=d*2;
+  const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
+  const r=customerRoute();
+
+  // Same automatic route calculation as the original working input fields.
+  if(m && (m[1]==="RZstart" || m[1]==="RZende") && r.minutes && row){
+    const a1=field("RZstart",outRow), a2=field("RZende",outRow);
+    const b1=field("RZstart",backRow), b2=field("RZende",backRow);
+
+    if(row===outRow && a1 && a2 && el.value){
+      if(el===a1) a2.value=addMinutesToTime(el.value,r.minutes);
+      else a1.value=addMinutesToTime(el.value,-r.minutes);
+
+      const az=field("AZstart",outRow);
+      if(az && a2.value && az.dataset.manual!=="1") az.value=a2.value;
+    }
+
+    if(row===backRow && b1 && b2 && el.value){
+      const pause=field("PauseRZ",backRow);
+      const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
+      const duration=r.minutes+pauseMin;
+      if(el===b1) b2.value=addMinutesToTime(el.value,duration);
+      else b1.value=addMinutesToTime(el.value,-duration);
+
+      const azEnd=field("AZende",outRow);
+      if(azEnd && b1.value && azEnd.dataset.manual!=="1") azEnd.value=b1.value;
+    }
   }
+
+  // Pause Reisezeit changes Rückfahrt by the selected customer route time
+  // plus exactly the pause entered by the user.
+  if(key===`PauseRZ${backRow}` && r.minutes){
+    const b1=field("RZstart",backRow), b2=field("RZende",backRow);
+    const pauseMin=pauseMinutes(el.value||"0");
+    if(b1?.value) b2.value=addMinutesToTime(b1.value,r.minutes+pauseMin);
+    else if(b2?.value) b1.value=addMinutesToTime(b2.value,-(r.minutes+pauseMin));
+  }
+
+  recalcTimes();
 });
 
   // Same automatic customer data as day 1.
@@ -459,6 +500,7 @@ fetch("companies.json").then(r=>{
   $("company").innerHTML='<option value="">— Firma auswählen —</option>'+
     companies.map((c,i)=>`<option value="${i}">${c.firma||c.name||"Firma "+(i+1)}</option>`).join("");
   $("company").onchange=()=>{
+    initQuarterTimeSelects($("times"));
     const c=companies[+$("company").value];
     if(!c)return;
     const a=address(c.adres||c.address||"");
