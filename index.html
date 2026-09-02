@@ -180,8 +180,8 @@ function dayTemplate(d){
 
     <div class="sectiontitle">Arbeitszeit</div>
     <div class="row">
-      <div class="field"><label>Arbeitszeit von – Arbeitsbeginn</label><input type="time" data-k="AZstart${(d*2)-1}"></div>
-      <div class="field"><label>Arbeitszeit bis – Arbeitsende</label><input type="time" data-k="AZende${(d*2)-1}"></div>
+      <div class="field"><label>Arbeitszeit von – Arbeitsbeginn (Ankunft)</label><input type="time" data-k="AZstart${(d*2)-1}"></div>
+      <div class="field"><label>Arbeitszeit bis – Arbeitsende (Abreise)</label><input type="time" data-k="AZende${(d*2)-1}"></div>
     </div>
     <div class="row">
       <div class="field"><label>Pause Arbeit (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseAZ${(d*2)-1}" value="0" placeholder="Minuten"></div>
@@ -405,6 +405,26 @@ function bindTimeInputs(){
           }
         }
       }
+      // Ankunft = Arbeitsbeginn; Abreise = Arbeitsende.
+      // Przy automatycznym ustawianiu nie oznaczamy pola jako ręcznego.
+      const daySuffix = (key==="RZende1" || key==="RZstart1") ? "1"
+                      : (key==="RZende2" || key==="RZstart2") ? "2" : null;
+      if(daySuffix){
+        if(key==="RZende1" || key==="RZende2"){
+          const azStart=document.querySelector(`[data-k="AZstart${daySuffix}"]`);
+          if(azStart && el.value && azStart.dataset.manual!=="1") azStart.value=el.value;
+        }
+        if(key==="RZstart1" || key==="RZstart2"){
+          const azEnd=document.querySelector(`[data-k="AZende${daySuffix}"]`);
+          if(azEnd && el.value && azEnd.dataset.manual!=="1") azEnd.value=el.value;
+        }
+      }
+      // Bezpośrednia zmiana pól pracy przez użytkownika blokuje dalsze automatyczne
+      // nadpisywanie tego konkretnego pola.
+      if(key==="AZstart1" || key==="AZstart2" || key==="AZende1" || key==="AZende2"){
+        el.dataset.manual="1";
+      }
+
       recalcTimes();
     });
   });
