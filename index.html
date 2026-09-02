@@ -70,7 +70,13 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <header><h1>Service-Bericht</h1><div class="muted">Wypełnij raport na iPadzie</div></header>
 <main>
 <section class="card"><h2>Klient</h2>
-<label>Firma</label><select id="company"><option>Ładowanie…</option></select>
+<label>Firma</label>
+<div id="customerSearchBox" class="field" style="margin-bottom:8px;">
+  <label>Kunde suchen</label>
+  <input type="search" id="customerSearch" placeholder="z. B. F" autocomplete="off" inputmode="text">
+  <div class="muted">Firma oder Anfangsbuchstaben eingeben – die Kundenliste wird sofort gefiltert.</div>
+</div>
+<select id="company"><option>Ładowanie…</option></select>
 <div class="grid">
 <div><label>Straße</label><input id="street"></div><div><label>PLZ, Ort</label><input id="city"></div>
 <div><label>Ansprechpartner</label><input id="contact"></div><div><label>Einsatzdatum</label><input id="date" type="date"></div>
@@ -718,6 +724,49 @@ $("share").onclick=async()=>{
       refresh();
     });
   });
+})();
+</script>
+
+<script>
+(function(){
+  function initCustomerSearch(){
+    const input=document.getElementById("customerSearch");
+    const select=document.querySelector('[data-k="company"]') || document.getElementById("company");
+    if(!input || !select) return;
+    if(input.dataset.bound==="1") return;
+    input.dataset.bound="1";
+
+    const originalOptions=Array.from(select.options).map(o=>({
+      value:o.value,
+      text:o.textContent,
+      disabled:o.disabled,
+      dataset:Object.fromEntries(Array.from(o.attributes).map(a=>[a.name,a.value]))
+    }));
+
+    function filter(){
+      const q=input.value.trim().toLocaleLowerCase("de-DE");
+      const current=select.value;
+      select.innerHTML="";
+      originalOptions.forEach(item=>{
+        if(!q || item.text.toLocaleLowerCase("de-DE").includes(q)){
+          const o=document.createElement("option");
+          o.value=item.value;
+          o.textContent=item.text;
+          o.disabled=item.disabled;
+          select.appendChild(o);
+        }
+      });
+      if(Array.from(select.options).some(o=>o.value===current)) select.value=current;
+      else if(select.options.length) select.selectedIndex=0;
+
+      // Let the existing app logic react to the filtered selection.
+      select.dispatchEvent(new Event("change",{bubbles:true}));
+    }
+    input.addEventListener("input",filter);
+  }
+
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",initCustomerSearch);
+  else initCustomerSearch();
 })();
 </script>
 </body>
