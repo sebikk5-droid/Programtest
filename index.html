@@ -65,6 +65,16 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .choice-group{border:1px solid #ddd;border-radius:10px;padding:10px;margin:8px 0}
 .choice-group .check{display:inline-flex;align-items:center;gap:8px;margin:6px 14px 6px 0;font-weight:600}
 .choice-group input[type=checkbox]{width:22px;height:22px;min-height:22px}
+
+
+.day-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.day-header h3{margin:0}
+.day-actions{display:flex;gap:6px;flex-wrap:wrap}
+.day-actions button{border:1px solid #bbb;background:#f5f5f5;border-radius:8px;padding:6px 9px;font-size:13px;cursor:pointer}
+.day-actions .day-remove{border-color:#c9a0a0}
+.day-content{display:block}
+.daybox.day-collapsed .day-content{display:none}
+.daybox.day-collapsed .day-collapse::after{content:""}
 </style></head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
@@ -181,7 +191,14 @@ let visibleDays=1;
 function dayTemplate(d){
   return `
   <div class="daybox" data-daybox="${d}">
-    <h3>Tag ${d}</h3>
+    <div class="day-header">
+      <h3>Tag ${d}</h3>
+      <div class="day-actions">
+        <button type="button" class="day-collapse" data-day-action="collapse" data-day="${d}" aria-expanded="true">▲ Einklappen</button>
+        <button type="button" class="day-remove" data-day-action="remove" data-day="${d}">✕ Tag löschen</button>
+      </div>
+    </div>
+    <div class="day-content" data-day-content="${d}">
     <div class="field"><label>Datum</label><input type="date" data-day="${d}" class="daydate"></div>
     <div class="choice-group" style="margin:8px 0 10px">
       <label class="check"><input type="checkbox" data-overnight-day="${d}"> Übern.-kosten – Ja</label>
@@ -226,6 +243,7 @@ function dayTemplate(d){
       <div class="field"><label>Gesamtzeit netto</label><input type="text" data-calc="total${d}" readonly></div>
     </div>
     <div class="muted" id="routeInfo${d}">${d===1?"Po wybraniu firmy dzień 1 pobiera km i czas jazdy z listy klienta.":"KM tego dnia wpisujesz ręcznie. Zeit jazdy i pracy liczy się automatycznie."}</div>
+    </div>
   </div>`;
 }
 $("times").innerHTML=dayTemplate(1)+`
@@ -255,6 +273,74 @@ $("addDay").onclick=()=>{
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
 };
+
+
+// Day controls: collapse or remove a day that was added by mistake.
+document.addEventListener("click",function(e){
+  const btn=e.target.closest("[data-day-action]");
+  if(!btn) return;
+  const action=btn.getAttribute("data-day-action");
+  const d=parseInt(btn.getAttribute("data-day"),10);
+  if(!d) return;
+
+  const box=document.querySelector(`[data-daybox="${d}"]`);
+  if(!box) return;
+
+  if(action==="collapse"){
+    const collapsed=box.classList.toggle("day-collapsed");
+    btn.textContent=collapsed ? "▼ Aufklappen" : "▲ Einklappen";
+    btn.setAttribute("aria-expanded",collapsed?"false":"true");
+    return;
+  }
+
+  if(action==="remove"){
+    if(d===1){
+      alert("Tag 1 kann nicht gelöscht werden.");
+      return;
+    }
+    if(!confirm(`Tag ${d} wirklich löschen?`)) return;
+
+    box.remove();
+
+    // Renumber remaining day boxes and their labels/actions so the sequence
+    // remains Tag 1, Tag 2, Tag 3...
+    const boxes=[...document.querySelectorAll("[data-daybox]")];
+    boxes.forEach((b,i)=>{
+      const n=i+1;
+      b.setAttribute("data-daybox",String(n));
+      const h=b.querySelector(".day-header h3");
+      if(h)h.textContent=`Tag ${n}`;
+      b.querySelectorAll("[data-day-action]").forEach(x=>x.setAttribute("data-day",String(n)));
+      b.querySelectorAll("[data-day-content]").forEach(x=>x.setAttribute("data-day-content",String(n)));
+      const info=b.querySelector('[id^="routeInfo"]');
+      if(info)info.id=`routeInfo${n}`;
+
+      // Keep existing field/calc indexes consistent with the day position.
+      const oldDay=String(i+1);
+      const oldOut=2*(i+1)-1, oldBack=2*(i+1);
+      const newOut=2*n-1, newBack=2*n;
+      b.querySelectorAll("[data-k]").forEach(x=>{
+        x.dataset.k=x.dataset.k.replace(/(\d+)$/,(_,num)=>{
+          const v=parseInt(num,10);
+          if(v===oldOut)return String(newOut);
+          if(v===oldBack)return String(newBack);
+          return num;
+        });
+      });
+      b.querySelectorAll("[data-calc]").forEach(x=>{
+        x.dataset.calc=x.dataset.calc.replace(/\d+$/,String(n));
+      });
+      b.querySelectorAll("[data-route-override]").forEach(x=>{
+        x.dataset.overrideEvents="0";
+      });
+    });
+
+    visibleDays=boxes.length;
+    bindTimeInputs();
+    recalcTimes();
+    if($("addDay"))$("addDay").style.display=visibleDays>=6?"none":"block";
+  }
+});
 
 function parseRoute(c){
   if(!c) return {km:0,minutes:0};
