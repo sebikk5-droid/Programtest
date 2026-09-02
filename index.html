@@ -631,7 +631,7 @@ function pdfCheck(form,name,on){
   }catch(e){}
 }
 function bindTimeInputs(){
-  document.querySelectorAll("#times input").forEach(el=>{
+  document.querySelectorAll("#times input, #times select").forEach(el=>{
     if(el.dataset.bound==="1") return;
     el.dataset.bound="1";
 
