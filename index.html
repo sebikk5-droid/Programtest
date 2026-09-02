@@ -551,11 +551,13 @@ function pdfCheck(form,name,on){
   }catch(e){}
 }
 function bindTimeInputs(){
-  document.querySelectorAll("#times input").forEach(el=>{
+  // Time fields are <select> controls (15-minute steps), while pause/KM
+  // fields remain inputs. Bind both so automatic calculations work again.
+  document.querySelectorAll("#times input, #times select").forEach(el=>{
     if(el.dataset.bound==="1") return;
     el.dataset.bound="1";
 
-    el.addEventListener("input",()=>{
+    const handleTimeChange=()=>{
       const key=el.dataset.k||"";
       const box=el.closest("[data-daybox]");
       const boxDay=box ? parseInt(box.getAttribute("data-daybox"),10) : 1;
@@ -657,6 +659,9 @@ function bindTimeInputs(){
     const recalcOverride=()=>el.dispatchEvent(new Event("input",{bubbles:true}));
     el.addEventListener("change",recalcOverride);
     el.addEventListener("blur",recalcOverride);
+  };
+    el.addEventListener("input",handleTimeChange);
+    el.addEventListener("change",handleTimeChange);
   });
 }
 
