@@ -68,15 +68,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </style></head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
-<main><div id="languageBox" style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:8px 0;">
-<label for="languageSelect">Sprache</label>
-<select id="languageSelect" style="width:auto;">
-<option value="de" selected>Deutsch</option>
-<option value="pl">Polski</option>
-</select>
-</div>
-
-<section class="card"><h2>Kunde</h2>
+<main><section class="card"><h2>Kunde</h2>
 <label>Firma</label><div id="customerSearchBox" style="margin:8px 0 10px;position:relative;">
 <label for="customerSearch">Kunde suchen</label>
 <input id="customerSearch" type="search" placeholder="Firma eingeben, z. B. Die" autocomplete="off" style="width:100%;">
@@ -811,95 +803,6 @@ $("share").onclick=async()=>{
     document.addEventListener("DOMContentLoaded",setupCustomerAutocomplete);
   else
     setupCustomerAutocomplete();
-})();
-</script>
-<script>
-(function(){
-  const dict = {
-    de: {
-      language:"Sprache", search:"Kunde suchen",
-      searchPlaceholder:"Firma eingeben, z. B. D",
-      history:"Historie", saved:"Gespeicherte Berichte",
-      choose:"— Bericht auswählen —", save:"＋ Speichern",
-      open:"Öffnen / Bearbeiten", del:"Löschen",
-      reset:"Zurücksetzen", pdf:"PDF erstellen",
-      chooseCompany:"— Firma auswählen —",
-      loading:"Wird geladen…", loadError:"Fehler beim Laden der Firmen",
-      noCompany:"Keine Firma gefunden",
-      saveMsg:"Bericht wurde gespeichert.",
-      selectMsg:"Bitte zuerst einen Bericht auswählen.",
-      openMsg:"Bericht öffnen und den aktuellen Inhalt ersetzen?",
-      opened:"Bericht wurde geöffnet.",
-      deleteMsg:"Diesen Bericht aus der Historie löschen?"
-    },
-    pl: {
-      language:"Język", search:"Szukaj klienta",
-      searchPlaceholder:"Wpisz firmę, np. D",
-      history:"Historia", saved:"Zapisane raporty",
-      choose:"— Wybierz raport —", save:"＋ Zapisz",
-      open:"Otwórz / Edytuj", del:"Usuń",
-      reset:"Wyczyść", pdf:"Generuj PDF",
-      chooseCompany:"— Wybierz firmę —",
-      loading:"Ładowanie…", loadError:"Błąd wczytywania firm",
-      noCompany:"Nie znaleziono firmy",
-      saveMsg:"Raport został zapisany.",
-      selectMsg:"Najpierw wybierz raport.",
-      openMsg:"Otworzyć raport i zastąpić aktualną zawartość?",
-      opened:"Raport został otwarty.",
-      deleteMsg:"Usunąć ten raport z historii?"
-    }
-  };
-
-  function applyLanguage(lang){
-    const d=dict[lang]||dict.de;
-    const box=document.getElementById("languageBox");
-    if(box){
-      const label=box.querySelector("label");
-      if(label) label.textContent=d.language;
-    }
-    const search=document.getElementById("customerSearch");
-    if(search){
-      search.placeholder=d.searchPlaceholder;
-      const lab=document.querySelector('label[for="customerSearch"]');
-      if(lab) lab.textContent=d.search;
-    }
-
-    const hs=document.getElementById("historySection");
-    if(hs){
-      const title=hs.querySelector(".sectiontitle");
-      if(title) title.textContent=d.history;
-      const lab=hs.querySelector("label[for='historySelect']");
-      if(lab) lab.textContent=d.saved;
-      const sel=document.getElementById("historySelect");
-      if(sel && sel.options.length) sel.options[0].textContent=d.choose;
-      const b1=document.getElementById("historySave");
-      const b2=document.getElementById("historyOpen");
-      const b3=document.getElementById("historyDelete");
-      if(b1) b1.textContent=d.save;
-      if(b2) b2.textContent=d.open;
-      if(b3) b3.textContent=d.del;
-    }
-
-    // Common visible buttons/labels, only when their current text is known.
-    document.querySelectorAll("button").forEach(b=>{
-      if(b.id==="historySave"||b.id==="historyOpen"||b.id==="historyDelete") return;
-      const t=b.textContent.trim();
-      if(t==="Wyczyść"||t==="Zurücksetzen") b.textContent=d.reset;
-      if(t==="Generuj PDF"||t==="PDF erstellen") b.textContent=d.pdf;
-    });
-
-    document.documentElement.lang=lang;
-    localStorage.setItem("ServiceBericht_language",lang);
-  }
-
-  document.addEventListener("DOMContentLoaded",function(){
-    const select=document.getElementById("languageSelect");
-    if(!select) return;
-    const saved=localStorage.getItem("ServiceBericht_language")||"de";
-    select.value=saved;
-    applyLanguage(saved);
-    select.addEventListener("change",function(){applyLanguage(select.value);});
-  });
 })();
 </script>
 </body>
