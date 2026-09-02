@@ -247,17 +247,13 @@ let visibleDays=1;
   </div>`;
 }
 $("times").innerHTML=dayTemplate(1)+`
-  <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Weiteren Tag hinzufügen</button>
+  <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px;display:block">＋ Weiteren Tag hinzufügen</button>
 `;
-document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
-function syncAddDayButton(){
-  const btn=$("addDay");
-  if(!btn)return;
-  const count=document.querySelectorAll("[data-daybox]").length;
-  visibleDays=count||1;
-  btn.style.display=visibleDays>=6?"none":"block";
-}
-syncAddDayButton();
+visibleDays=1;
+const firstDay=document.querySelector('[data-daybox="1"]');
+if(firstDay) firstDay.style.display="block";
+const addDayButton=$("addDay");
+if(addDayButton) addDayButton.style.display="block";
 $("addDay").onclick=()=>{
   if(visibleDays>=6)return;
   const d=visibleDays+1;
@@ -279,7 +275,7 @@ $("addDay").onclick=()=>{
   if(pause && pause.value==="")pause.value="0";
 
   recalcTimes();
-  syncAddDayButton();
+  if($("addDay"))$("addDay").style.display=visibleDays>=6?"none":"block";
 };
 
 
@@ -346,7 +342,7 @@ document.addEventListener("click",function(e){
     visibleDays=boxes.length;
     bindTimeInputs();
     recalcTimes();
-    syncAddDayButton();
+    if($("addDay"))$("addDay").style.display=visibleDays>=6?"none":"block";
   }
 });
 
@@ -838,7 +834,6 @@ $("share").onclick=async()=>{
 
     // Re-run calculations only after every saved value has been restored.
     if(typeof recalcTimes==="function") recalcTimes();
-    syncAddDayButton();
   }
   function refresh(){
     const sel=document.getElementById("historySelect");
