@@ -51,6 +51,10 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .daybox input{width:100%;min-height:40px;box-sizing:border-box}
 .daybox{border:1px solid #d6d6d6;border-radius:12px;padding:12px;margin:12px 0;background:#fff}
 .sectiontitle{font-weight:750;margin-top:12px;padding-top:9px;border-top:1px solid #eee}
+</style><style>
+@media print{
+  .daybox[data-daybox]:not([data-day-active="1"]){display:none!important}
+}
 </style></head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Wypełnij raport na iPadzie</div></header>
@@ -146,10 +150,12 @@ function dayTemplate(d){
 $("times").innerHTML=dayTemplate(1)+`
   <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Dodaj kolejny dzień</button>
 `;
+document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
 $("addDay").onclick=()=>{
   if(visibleDays>=6)return;
   visibleDays++;
   $("addDay").insertAdjacentHTML("beforebegin",dayTemplate(visibleDays));
+  document.querySelector(`[data-daybox="${visibleDays}"]`)?.setAttribute("data-day-active","1");
   bindTimeInputs();
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
@@ -262,9 +268,15 @@ function pauseMinutes(v){
   const x=parseFloat(v.replace(",",".")); return Number.isFinite(x)?Math.round(x*60):0;
 }
 function fmtMin(m){m=Math.max(0,Math.round(m));return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");}
+function getActiveDays(){
+  return Array.from(document.querySelectorAll("[data-daybox]"))
+    .map(x=>parseInt(x.dataset.daybox,10))
+    .filter(Number.isFinite)
+    .sort((a,b)=>a-b);
+}
 function recalcTimes(){
   let travel=0,work=0,km=0;
-  for(let d=1;d<=6;d++){
+  for(let d=1;d<=visibleDays;d++){
     const a=d*2-1,b=d*2;
     const q=k=>document.querySelector(`[data-k="${k}"]`)||{value:""};
     const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value));
@@ -319,7 +331,7 @@ set(form,"Name Unterschrift Kunde",$("customersign").value);
 let r=ls($("remarks").value);for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,r[i-1]||"");
 let p=ls($("parts").value);for(let i=1;i<=4;i++)set(form,"Ersatzteile "+i,p[i-1]||"");
 let km=0, travel=0, work=0;
-for(let d=1;d<=6;d++){
+for(let d=1;d<=visibleDays;d++){
   const a=(d*2)-1,b=d*2;
   const q=k=>document.querySelector(`[data-k="${k}"]`) || {value:""};
   const day=document.querySelector(`[data-day="${d}"]`);
