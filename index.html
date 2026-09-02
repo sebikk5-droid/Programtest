@@ -79,22 +79,22 @@ for(let d=1;d<=6;d++){
     <h3 style="font-size:15px;margin:0 0 6px">Tag ${d}</h3>
     <label>Datum</label><input type="date" data-day="${d}" class="daydate">
     <div class="row">
-      <input placeholder="Anfahrt von" data-k="RZstart${(d*2)-1}">
-      <input placeholder="Anfahrt bis" data-k="RZende${(d*2)-1}">
-      <input placeholder="Pause Fahrt" data-k="PauseRZ${(d*2)-1}">
-      <input placeholder="Arbeit von" data-k="AZstart${(d*2)-1}">
-      <input placeholder="Arbeit bis" data-k="AZende${(d*2)-1}">
-      <input placeholder="Pause Arbeit" data-k="PauseAZ${(d*2)-1}">
+      <input type="time" data-k="RZstart${(d*2)-1}">
+      <input type="time" data-k="RZende${(d*2)-1}">
+      <input type="time" data-k="PauseRZ${(d*2)-1}" value="00:00">
+      <input type="time" data-k="AZstart${(d*2)-1}">
+      <input type="time" data-k="AZende${(d*2)-1}">
+      <input type="time" data-k="PauseAZ${(d*2)-1}" value="00:00">
     </div>
     <div class="row">
-      <input inputmode="decimal" placeholder="km Anfahrt" data-k="Kilometer${(d*2)-1}" readonly>
-      <input placeholder="Rückfahrt von" data-k="RZstart${d*2}">
-      <input placeholder="Rückfahrt bis" data-k="RZende${d*2}">
-      <input placeholder="Pause Fahrt" data-k="PauseRZ${d*2}">
-      <input inputmode="decimal" placeholder="km Rückfahrt" data-k="Kilometer${d*2}" readonly>
+      <input type="number" inputmode="decimal" step="0.1" placeholder="km Anfahrt" data-k="Kilometer${(d*2)-1}">
+      <input type="time" data-k="RZstart${d*2}">
+      <input type="time" data-k="RZende${d*2}">
+      <input type="time" data-k="PauseRZ${d*2}" value="00:00">
+      <input type="number" inputmode="decimal" step="0.1" placeholder="km Rückfahrt" data-k="Kilometer${d*2}">
       <input disabled placeholder="Netto RZ / AZ">
     </div>
-    <div class="muted" id="routeInfo${d}">Po wybraniu klienta aplikacja dobierze km i czas jazdy z listy klientów.</div>
+    <div class="muted" id="routeInfo${d}">Dzień 1: km są pobierane z listy klienta. Dni 2–6: km możesz wpisać ręcznie. Godziny wybierasz zegarem.</div>
   </div>`);
 }
 
@@ -116,9 +116,12 @@ function fillRouteForDay(d,c){
   const r=parseRoute(c);
   const a=(d*2)-1,b=d*2;
   const q=k=>document.querySelector(`[data-k="${k}"]`) || {value:""};
-  if(r.km){
+  if(r.km && d===1){
     q(`Kilometer${a}`).value=String(r.km).replace(".",",");
     q(`Kilometer${b}`).value=String(r.km).replace(".",",");
+  } else if(d>1){
+    q(`Kilometer${a}`).value="";
+    q(`Kilometer${b}`).value="";
   }
   const s1=q(`RZstart${a}`).value, s2=q(`RZstart${b}`).value;
   if(r.minutes){
@@ -128,7 +131,7 @@ function fillRouteForDay(d,c){
   const info=$(`routeInfo${d}`);
   if(info){
     info.textContent=r.km&&r.minutes
-      ? `Aus Kundenliste: ${r.km} km und ${fmtMin(r.minutes)} Fahrzeit je Strecke. RZ-Ende wird automatisch aus RZ-Start berechnet.`
+      ? `Aus Kundenliste: ${r.km} km und ${fmtMin(r.minutes)} Fahrzeit je Strecke. KM werden am ersten Tag automatisch eingetragen; an weiteren Tagen kannst du die KM manuell eingeben. RZ-Ende wird automatisch aus RZ-Start berechnet.`
       : (r.km ? `Aus Kundenliste: ${r.km} km je Strecke. Fahrzeit ist nicht hinterlegt.` :
          (r.minutes ? `Aus Kundenliste: ${fmtMin(r.minutes)} Fahrzeit je Strecke. Kilometer sind nicht hinterlegt.` :
          "Für diesen Kunden sind keine Fahrdaten in der Kundenliste hinterlegt."));
