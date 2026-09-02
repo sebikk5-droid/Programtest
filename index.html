@@ -1139,130 +1139,94 @@ $("share").onclick=async()=>{
 })();
 </script>
 
+
+
 <script>
 (function(){
-  const STORAGE_VERSION="bericht-file-v1";
-
-  function collectBerichtState(){
-    const root=document.getElementById("times")||document.body;
-    const fields=[...root.querySelectorAll("input,select,textarea")].map((el,i)=>({
-      key:el.dataset.k||el.name||el.id||("field_"+i),
-      type:el.type||el.tagName.toLowerCase(),
-      value:el.value,
-      checked:!!el.checked,
-      manual:el.dataset.manual||null,
-      routeOverride:el.dataset.routeOverride||null
-    }));
-    return {
-      version:STORAGE_VERSION,
-      savedAt:new Date().toISOString(),
-      visibleDays:typeof visibleDays==="number"?visibleDays:null,
-      fields
-    };
-  }
-
-  function restoreBerichtState(state){
-    if(!state || state.version!==STORAGE_VERSION || !Array.isArray(state.fields))
-      throw new Error("Ungültige Bericht-Datei.");
-
-    // Restore number of days first so all controls exist.
-    if(typeof state.visibleDays==="number" && state.visibleDays>1){
-      while(typeof visibleDays==="number" && visibleDays<state.visibleDays){
-        const add=document.getElementById("addDay");
-        if(!add) break;
-        add.click();
+  function existingHistoryData(){
+    // Reuse the application's existing history storage, not a second serializer.
+    const keys=Object.keys(localStorage);
+    for(const k of keys){
+      if(/bericht|service|history|historie/i.test(k)){
+        try{
+          const v=localStorage.getItem(k);
+          if(v && v.length>2) return {key:k,value:v};
+        }catch(e){}
       }
     }
-
-    const all=[...document.querySelectorAll("input,select,textarea")];
-    const byKey=new Map();
-    all.forEach((el,i)=>{
-      byKey.set(el.dataset.k||el.name||el.id||("field_"+i),el);
-    });
-
-    state.fields.forEach(f=>{
-      const el=byKey.get(f.key);
-      if(!el) return;
-      el.value=f.value??"";
-      if(el.type==="checkbox"||el.type==="radio") el.checked=!!f.checked;
-      if(f.manual!==null && f.manual!==undefined) el.dataset.manual=f.manual;
-      else el.removeAttribute("data-manual");
-      if(f.routeOverride!==null && f.routeOverride!==undefined) el.dataset.routeOverride=f.routeOverride;
-      else el.removeAttribute("data-route-override");
-    });
-
-    if(typeof recalcTimes==="function") recalcTimes();
+    return null;
   }
 
-  async function saveBerichtUnder(){
-    const state=collectBerichtState();
-    const suggested="Bericht_"+new Date().toISOString().slice(0,10)+".bericht.json";
-    const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  async function exportExistingHistory(){
+    const data=existingHistoryData();
+    if(!data){ alert("Keine gespeicherte Bericht-Historie gefunden."); return; }
+    const blob=new Blob([data.value],{type:"application/json"});
+    const name="Bericht_Historie.json";
 
     if(window.showSaveFilePicker){
       const handle=await window.showSaveFilePicker({
-        suggestedName:suggested,
-        types:[{description:"Bericht-Datei",accept:{"application/json":[".json"]}}]
+        suggestedName:name,
+        types:[{description:"Bericht-Historie",accept:{"application/json":[".json"]}}]
       });
-      const writable=await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return;
+      const w=await handle.createWritable(); await w.write(blob); await w.close();
+    }else{
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob); a.download=name;
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
     }
-
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download=suggested;
-    document.body.appendChild(a); a.click();
-    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
   }
 
-  async function openBerichtFile(){
+  async function importExistingHistory(){
+    let text=null;
     if(window.showOpenFilePicker){
       const [handle]=await window.showOpenFilePicker({
         multiple:false,
-        types:[{description:"Bericht-Datei",accept:{"application/json":[".json"]}}]
+        types:[{description:"Bericht-Historie",accept:{"application/json":[".json"]}}]
       });
-      const file=await handle.getFile();
-      restoreBerichtState(JSON.parse(await file.text()));
-      return;
+      text=await (await handle.getFile()).text();
+    }else{
+      const input=document.createElement("input");
+      input.type="file"; input.accept=".json,application/json";
+      text=await new Promise(resolve=>{
+        input.onchange=async()=>resolve(input.files[0]?await input.files[0].text():null);
+        input.click();
+      });
     }
-    const input=document.createElement("input");
-    input.type="file"; input.accept=".json,application/json";
-    input.onchange=async()=>{
-      if(!input.files[0]) return;
-      restoreBerichtState(JSON.parse(await input.files[0].text()));
-    };
-    input.click();
+    if(!text) return;
+
+    const data=existingHistoryData();
+    if(!data){ alert("Keine bestehende Historie-Struktur gefunden."); return; }
+
+    // Put the imported history back into the SAME localStorage key.
+    localStorage.setItem(data.key,text);
+    location.reload();
   }
 
-  function addButtonNearExistingSave(){
-    // Use a single existing save/load area if identifiable. No new PDF button.
-    const pdf=[...document.querySelectorAll("button")].find(b=>/PDF speichern/i.test(b.textContent));
-    const host=pdf?.parentElement||document.getElementById("actions")||document.body;
+  function addToExistingHistoryUI(){
+    const all=[...document.querySelectorAll("button")];
+    const hist=all.find(b=>/Historie|history/i.test(b.textContent))?.parentElement
+      || [...document.querySelectorAll("section,div")].find(x=>/Historie/i.test(x.textContent||"") && x.querySelector("button"));
+    const host=hist || document.getElementById("actions") || document.body;
 
-    if(!document.getElementById("saveBerichtUnder")){
+    if(!document.getElementById("historyExportFile")){
       const b=document.createElement("button");
-      b.type="button"; b.id="saveBerichtUnder"; b.textContent="Bericht speichern unter…";
-      b.addEventListener("click",()=>saveBerichtUnder().catch(e=>{
-        if(e?.name!=="AbortError") alert("Bericht konnte nicht gespeichert werden: "+(e?.message||e));
-      }));
+      b.id="historyExportFile"; b.type="button";
+      b.textContent="Historie speichern unter…";
+      b.onclick=()=>exportExistingHistory().catch(e=>{if(e?.name!=="AbortError")alert(e.message||e)});
       host.appendChild(b);
     }
-
-    if(!document.getElementById("openBerichtFile")){
+    if(!document.getElementById("historyImportFile")){
       const b=document.createElement("button");
-      b.type="button"; b.id="openBerichtFile"; b.textContent="Bericht öffnen…";
-      b.addEventListener("click",()=>openBerichtFile().catch(e=>{
-        if(e?.name!=="AbortError") alert("Bericht konnte nicht geöffnet werden: "+(e?.message||e));
-      }));
+      b.id="historyImportFile"; b.type="button";
+      b.textContent="Historie öffnen…";
+      b.onclick=()=>importExistingHistory().catch(e=>{if(e?.name!=="AbortError")alert(e.message||e)});
       host.appendChild(b);
     }
   }
 
-  if(document.readyState==="loading")
-    document.addEventListener("DOMContentLoaded",addButtonNearExistingSave);
-  else addButtonNearExistingSave();
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",addToExistingHistoryUI);
+  else addToExistingHistoryUI();
 })();
 </script>
 </body>
