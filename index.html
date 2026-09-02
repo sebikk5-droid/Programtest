@@ -70,9 +70,10 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <header><h1>Service-Bericht</h1><div class="muted">Wypełnij raport na iPadzie</div></header>
 <main>
 <section class="card"><h2>Klient</h2>
-<label>Firma</label><div id="customerSearchBox" style="margin:8px 0 4px;">
+<label>Firma</label><div id="customerSearchBox" style="margin:8px 0 10px;position:relative;">
 <label for="customerSearch">Kunde suchen</label>
-<input id="customerSearch" type="search" placeholder="Firma oder Buchstaben eingeben, z. B. D" autocomplete="off" style="width:100%;">
+<input id="customerSearch" type="search" placeholder="Firma eingeben, z. B. Die" autocomplete="off" style="width:100%;">
+<div id="customerSearchResults" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid #bbb;border-radius:8px;max-height:240px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15);"></div>
 </div>
 <select id="company"><option>Ładowanie…</option></select>
 <div class="grid">
@@ -726,36 +727,83 @@ $("share").onclick=async()=>{
 </script>
 <script>
 (function(){
-  function setupCustomerSearch(){
+  function setupCustomerAutocomplete(){
     const input=document.getElementById("customerSearch");
+    const results=document.getElementById("customerSearchResults");
     const select=document.getElementById("company");
-    if(!input || !select || input.dataset.bound==="1") return;
+    if(!input||!results||!select||input.dataset.bound==="1") return;
     input.dataset.bound="1";
 
-    function filter(){
-      const q=input.value.trim().toLocaleLowerCase("de-DE");
-      Array.from(select.options).forEach(function(opt){
-        // Keep the placeholder visible.
-        if(opt.value===""){
-          opt.hidden=false;
-          return;
-        }
-        opt.hidden = !!q && !opt.textContent.toLocaleLowerCase("de-DE").includes(q);
-      });
-
-      // Do NOT change select.value and do NOT dispatch change.
-      // The original V26 company onchange remains fully responsible for
-      // address, contact and travel-time loading.
+    function getOptions(){
+      return Array.from(select.options).filter(o=>o.value!=="" && !o.disabled);
     }
 
-    input.addEventListener("input",filter);
+    function close(){
+      results.style.display="none";
+      results.innerHTML="";
+    }
+
+    function choose(opt){
+      select.value=opt.value;
+      input.value=opt.textContent.trim();
+      close();
+      // Trigger the original V26 company handler so address, contact,
+      // kilometers and travel time are loaded normally.
+      select.dispatchEvent(new Event("change",{bubbles:true}));
+    }
+
+    function show(){
+      const q=input.value.trim().toLocaleLowerCase("de-DE");
+      results.innerHTML="";
+      if(!q){ close(); return; }
+
+      const options=getOptions().filter(o =>
+        o.textContent.trim().toLocaleLowerCase("de-DE").startsWith(q)
+      );
+
+      if(!options.length){
+        const empty=document.createElement("div");
+        empty.textContent="Keine Firma gefunden";
+        empty.style.padding="10px";
+        empty.style.color="#777";
+        results.appendChild(empty);
+        results.style.display="block";
+        return;
+      }
+
+      options.forEach(opt=>{
+        const item=document.createElement("button");
+        item.type="button";
+        item.textContent=opt.textContent.trim();
+        item.style.display="block";
+        item.style.width="100%";
+        item.style.textAlign="left";
+        item.style.padding="10px 12px";
+        item.style.border="0";
+        item.style.background="#fff";
+        item.style.cursor="pointer";
+        item.addEventListener("mousedown",function(e){
+          e.preventDefault();
+          choose(opt);
+        });
+        results.appendChild(item);
+      });
+      results.style.display="block";
+    }
+
+    input.addEventListener("input",show);
+    input.addEventListener("focus",function(){
+      if(input.value.trim()) show();
+    });
+    document.addEventListener("click",function(e){
+      if(!document.getElementById("customerSearchBox").contains(e.target)) close();
+    });
   }
 
-  if(document.readyState==="loading"){
-    document.addEventListener("DOMContentLoaded",setupCustomerSearch);
-  }else{
-    setupCustomerSearch();
-  }
+  if(document.readyState==="loading")
+    document.addEventListener("DOMContentLoaded",setupCustomerAutocomplete);
+  else
+    setupCustomerAutocomplete();
 })();
 </script>
 </body>
