@@ -117,6 +117,24 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
     <label class="check"><input id="maschine_ok" type="checkbox"> Maschine in ordnungsgemäßem Zustand übernommen</label>
   </div>
 </div>
+
+<section id="historySection" class="card" style="margin:12px 0;">
+  <div class="sectiontitle">Historie</div>
+  <div class="row">
+    <div class="field" style="flex:1">
+      <label>Gespeicherte Berichte</label>
+      <select id="historySelect">
+        <option value="">— Bericht auswählen —</option>
+      </select>
+    </div>
+    <div class="field" style="display:flex;align-items:end;gap:8px;flex-wrap:wrap">
+      <button type="button" id="historySave" class="primary">＋ Speichern</button>
+      <button type="button" id="historyOpen">Öffnen / Bearbeiten</button>
+      <button type="button" id="historyDelete">Löschen</button>
+    </div>
+  </div>
+  <div class="muted">Gespeicherte Berichte können später geöffnet, geändert und erneut als PDF erstellt werden.</div>
+</section>
 <div id="times"></div>
 <div class="grid" style="margin-top:12px">
 <div><label>Reisezeit gesamt</label><input id="travelTotal" readonly></div>
@@ -598,6 +616,109 @@ $("share").onclick=async()=>{
   }
 };
 
+</script>
+
+<script>
+(function(){
+  const HISTORY_KEY="servicebericht_history_v26";
+
+  function loadHistory(){
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]"); }
+    catch(e){ return []; }
+  }
+  function saveHistory(list){
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  }
+  function collectForm(){
+    const data={};
+    document.querySelectorAll("input, textarea, select").forEach(el=>{
+      const key=el.dataset.k || el.id || el.name;
+      if(!key) return;
+      if(el.type==="checkbox" || el.type==="radio") data[key]=el.checked;
+      else data[key]=el.value;
+    });
+    data.__visibleDays = (typeof visibleDays==="number") ? visibleDays : 1;
+    return data;
+  }
+  function applyForm(data){
+    if(data.__visibleDays && typeof visibleDays==="number"){
+      while(visibleDays < data.__visibleDays){
+        const add=document.getElementById("addDay");
+        if(!add) break;
+        add.click();
+      }
+    }
+
+    Object.keys(data).forEach(key=>{
+      if(key==="__visibleDays") return;
+      let el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
+      if(!el) el=document.getElementById(key);
+      if(!el) return;
+
+      if(el.type==="checkbox" || el.type==="radio") el.checked=!!data[key];
+      else el.value=data[key] ?? "";
+    });
+
+    if(typeof recalcTimes==="function") recalcTimes();
+  }
+  function refresh(){
+    const sel=document.getElementById("historySelect");
+    if(!sel) return;
+    const list=loadHistory();
+    sel.innerHTML='<option value="">— Bericht auswählen —</option>';
+    list.forEach((item,i)=>{
+      const opt=document.createElement("option");
+      opt.value=i;
+      opt.textContent=(item.name||"Bericht")+" – "+new Date(item.savedAt).toLocaleString("de-DE");
+      sel.appendChild(opt);
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    refresh();
+
+    const save=document.getElementById("historySave");
+    const open=document.getElementById("historyOpen");
+    const del=document.getElementById("historyDelete");
+    const sel=document.getElementById("historySelect");
+
+    save?.addEventListener("click",()=>{
+      const list=loadHistory();
+      const company=document.getElementById("company")?.selectedOptions?.[0]?.textContent || "Bericht";
+      const name=prompt("Name für den Bericht:", company && !company.startsWith("—") ? company : "Bericht");
+      if(name===null) return;
+
+      list.unshift({
+        name:name.trim() || "Bericht",
+        savedAt:new Date().toISOString(),
+        data:collectForm()
+      });
+      saveHistory(list.slice(0,100));
+      refresh();
+      sel.value="0";
+    });
+
+    open?.addEventListener("click",()=>{
+      if(sel.value===""){
+        alert("Bitte zuerst einen Bericht auswählen.");
+        return;
+      }
+      const list=loadHistory();
+      const item=list[Number(sel.value)];
+      if(item) applyForm(item.data);
+    });
+
+    del?.addEventListener("click",()=>{
+      if(sel.value==="") return;
+      const list=loadHistory();
+      const idx=Number(sel.value);
+      if(!confirm("Diesen Bericht aus der Historie löschen?")) return;
+      list.splice(idx,1);
+      saveHistory(list);
+      refresh();
+    });
+  });
+})();
 </script>
 </body>
 </html>
