@@ -194,7 +194,7 @@ function dayTemplate(d){
       <div class="field"><label>Rückfahrt bis – Ankunft zuhause</label><input type="time" data-k="RZende${d*2}"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Pause während Rückfahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${d*2}" value="0" placeholder="Minuten"></div>
+      <div class="field"><label>Pause während Rückfahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${d*2}" value="${d===1?"45":"0"}" placeholder="Minuten"></div>
       <div class="field"><label>Reisezeit netto</label><input type="text" data-calc="rr${d}" readonly></div>
     </div>
     <div class="row">
@@ -270,21 +270,27 @@ function applyCustomerRouteDay1(){
   const a2=document.querySelector('[data-k="RZende1"]');
   const b1=document.querySelector('[data-k="RZstart2"]');
   const b2=document.querySelector('[data-k="RZende2"]');
+  const pauseR=document.querySelector('[data-k="PauseRZ2"]');
 
   if(r.minutes){
+    // Anfahrt: dokładnie czas z listy klienta.
     if(a1 && a2){
       if(a2.value) a1.value=addMinutesToTime(a2.value,-r.minutes);
       else if(a1.value) a2.value=addMinutesToTime(a1.value,r.minutes);
     }
+
+    // Rückfahrt: czas z listy + 45 min przerwy.
+    if(pauseR) pauseR.value="45";
+    const rueckfahrtGesamt=r.minutes+45;
     if(b1 && b2){
-      if(b2.value) b1.value=addMinutesToTime(b2.value,-r.minutes);
-      else if(b1.value) b2.value=addMinutesToTime(b1.value,r.minutes);
+      if(b2.value) b1.value=addMinutesToTime(b2.value,-rueckfahrtGesamt);
+      else if(b1.value) b2.value=addMinutesToTime(b1.value,rueckfahrtGesamt);
     }
   }
 
   const info=document.getElementById("routeInfo1");
   if(info){
-    info.textContent=`Klient: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Eingabe von ODER bis berechnet automatisch das andere Feld.`;
+    info.textContent=`Klient: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Rückfahrt: ${fmtMin(r.minutes)} + 45 Min Pause.`;
   }
   recalcTimes();
 }
@@ -375,14 +381,28 @@ function bindTimeInputs(){
     el.dataset.bound="1";
     el.addEventListener("input",()=>{
       const key=el.dataset.k||"";
+
+      // Automatyczne wyliczanie z listy klienta dotyczy TYLKO dnia 1.
+      // Anfahrt = czas z listy.
+      // Rückfahrt = czas z listy + stała przerwa 45 min.
       if(["RZstart1","RZende1","RZstart2","RZende2"].includes(key) && companies?.length){
         const r=customerRoute();
         const pairs={RZstart1:"RZende1",RZende1:"RZstart1",RZstart2:"RZende2",RZende2:"RZstart2"};
         const other=document.querySelector(`[data-k="${pairs[key]}"]`);
+
         if(other && r.minutes && el.value){
-          other.value=key.startsWith("RZstart")
-            ? addMinutesToTime(el.value,r.minutes)
-            : addMinutesToTime(el.value,-r.minutes);
+          const duration = (key==="RZstart2" || key==="RZende2")
+            ? r.minutes + 45
+            : r.minutes;
+
+          other.value = key.startsWith("RZstart")
+            ? addMinutesToTime(el.value,duration)
+            : addMinutesToTime(el.value,-duration);
+
+          if(key==="RZstart2" || key==="RZende2"){
+            const pause=document.querySelector('[data-k="PauseRZ2"]');
+            if(pause) pause.value="45";
+          }
         }
       }
       recalcTimes();
