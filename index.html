@@ -961,32 +961,84 @@ $("share").onclick=async()=>{
     const del=document.getElementById("historyDelete");
     const sel=document.getElementById("historySelect");
 
-    save?.addEventListener("click",()=>{
-      const list=loadHistory();
-      const company=document.getElementById("company")?.selectedOptions?.[0]?.textContent || "Bericht";
-      const name=prompt("Name für den Bericht:", company && !company.startsWith("—") ? company : "Bericht");
-      if(name===null) return;
+    // EXISTING „＋ Speichern“:
+    // Save the COMPLETE existing history as one local JSON file.
+    save?.addEventListener("click",async()=>{
+      try{
+        const list=loadHistory();
+        if(!list.length){
+          alert("Die Historie ist leer.");
+          return;
+        }
 
-      list.unshift({
-        name:name.trim() || "Bericht",
-        savedAt:new Date().toISOString(),
-        data:collectForm()
-      });
-      saveHistory(list.slice(0,100));
-      refresh();
-      sel.value="0";
-    });
+        const company=document.getElementById("company")?.selectedOptions?.[0]?.textContent || "Servicebericht";
+        const suggested=(company && !company.startsWith("—") ? company.trim() : "Servicebericht")
+          .replace(/[\\/:*?"<>|]/g,"_")+"_Historie.json";
 
-    open?.addEventListener("click",()=>{
-      if(sel.value===""){
-        alert("Bitte zuerst einen Bericht auswählen.");
-        return;
+        const payload={
+          format:"ServiceBericht-Historie",
+          version:1,
+          savedAt:new Date().toISOString(),
+          history:list
+        };
+        const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+
+        if(window.showSaveFilePicker){
+          const handle=await window.showSaveFilePicker({
+            suggestedName:suggested,
+            types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
+          });
+          const w=await handle.createWritable();
+          await w.write(blob);
+          await w.close();
+          $("status").textContent="Historie wurde gespeichert.";
+        }else{
+          const a=document.createElement("a");
+          a.href=URL.createObjectURL(blob);
+          a.download=suggested;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+        }
+      }catch(e){
+        if(e?.name!=="AbortError") alert("Historie konnte nicht gespeichert werden: "+(e?.message||e));
       }
-      const list=loadHistory();
-      const item=list[Number(sel.value)];
-      if(item) applyForm(item.data);
     });
 
+    // EXISTING „Öffnen / Bearbeiten“:
+    // Open a history file from a user-selected local folder and put it back
+    // into the SAME existing localStorage history key.
+    open?.addEventListener("click",async()=>{
+      try{
+        let text=null;
+        if(window.showOpenFilePicker){
+          const [handle]=await window.showOpenFilePicker({
+            multiple:false,
+            types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
+          });
+          text=await (await handle.getFile()).text();
+        }else{
+          const input=document.createElement("input");
+          input.type="file"; input.accept=".json,application/json";
+          text=await new Promise(resolve=>{
+            input.onchange=async()=>resolve(input.files[0]?await input.files[0].text():null);
+            input.click();
+          });
+        }
+        if(!text) return;
+
+        const payload=JSON.parse(text);
+        const list=Array.isArray(payload) ? payload : payload.history;
+        if(!Array.isArray(list)) throw new Error("Keine gültige Bericht-Historie gefunden.");
+
+        saveHistory(list);
+        refresh();
+        $("status").textContent="Historie wurde geöffnet.";
+      }catch(e){
+        if(e?.name!=="AbortError") alert("Historie konnte nicht geöffnet werden: "+(e?.message||e));
+      }
+    });
+
+    // EXISTING delete behavior stays unchanged.
     del?.addEventListener("click",()=>{
       if(sel.value==="") return;
       const list=loadHistory();
