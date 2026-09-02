@@ -188,7 +188,7 @@ const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signd
 
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
 let visibleDays=1;
-function dayTemplate(d){
+// Time pickers use 15-minute steps (00/15/30/45).\nfunction dayTemplate(d){
   return `
   <div class="daybox" data-daybox="${d}">
     <div class="day-header">
@@ -206,8 +206,8 @@ function dayTemplate(d){
 
     <div class="sectiontitle">Anfahrt</div>
     <div class="row">
-      <div class="field"><label>Anfahrt von – Abfahrt</label><input type="time" data-k="RZstart${(d*2)-1}" aria-label="Anfahrt von"></div>
-      <div class="field"><label>Anfahrt bis – Ankunft</label><input type="time" data-k="RZende${(d*2)-1}" aria-label="Anfahrt bis"></div>
+      <div class="field"><label>Anfahrt von – Abfahrt</label><input type="time" step="900" data-k="RZstart${(d*2)-1}" aria-label="Anfahrt von"></div>
+      <div class="field"><label>Anfahrt bis – Ankunft</label><input type="time" step="900" data-k="RZende${(d*2)-1}" aria-label="Anfahrt bis"></div>
     </div>
     <div class="row">
       <div class="field"><label>Pause während Fahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${(d*2)-1}" value="0" placeholder="Minuten"></div>
@@ -220,8 +220,8 @@ function dayTemplate(d){
 
     <div class="sectiontitle">Arbeitszeit</div>
     <div class="row">
-      <div class="field"><label>Arbeitszeit von – Arbeitsbeginn</label><input type="time" data-k="AZstart${(d*2)-1}"></div>
-      <div class="field"><label>Arbeitszeit bis – Arbeitsende</label><input type="time" data-k="AZende${(d*2)-1}"></div>
+      <div class="field"><label>Arbeitszeit von – Arbeitsbeginn</label><input type="time" step="900" data-k="AZstart${(d*2)-1}"></div>
+      <div class="field"><label>Arbeitszeit bis – Arbeitsende</label><input type="time" step="900" data-k="AZende${(d*2)-1}"></div>
     </div>
     <div class="row">
       <div class="field"><label>Pause Arbeit (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseAZ${(d*2)-1}" value="0" placeholder="Minuten"></div>
@@ -230,8 +230,8 @@ function dayTemplate(d){
 
     <div class="sectiontitle">Rückfahrt</div>
     <div class="row">
-      <div class="field"><label>Rückfahrt von – Abfahrt</label><input type="time" data-k="RZstart${d*2}"></div>
-      <div class="field"><label>Rückfahrt bis – Ankunft zuhause</label><input type="time" data-k="RZende${d*2}"></div>
+      <div class="field"><label>Rückfahrt von – Abfahrt</label><input type="time" step="900" data-k="RZstart${d*2}"></div>
+      <div class="field"><label>Rückfahrt bis – Ankunft zuhause</label><input type="time" step="900" data-k="RZende${d*2}"></div>
     </div>
     <div class="row">
       <div class="field"><label>Pause während Rückfahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${d*2}" value="0" placeholder="Minuten"></div>
