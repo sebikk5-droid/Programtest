@@ -39,6 +39,13 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .daybox input{width:100%;box-sizing:border-box;min-height:40px}
 .daybox{margin:12px 0;padding:12px;border:1px solid #ddd;border-radius:12px}
 .sectiontitle{font-weight:700;margin-top:12px;padding-top:8px;border-top:1px solid #eee}
+</style><style>
+.daybox{background:#fff;border:1px solid #ddd;border-radius:12px;padding:12px;margin:12px 0}
+.daybox h3{margin:0 0 10px}
+.field label{display:block!important;font-weight:700!important;font-size:13px!important;margin:3px 0 4px!important}
+.field input{width:100%;box-sizing:border-box;min-height:40px}
+.sectiontitle{font-weight:700;margin-top:12px;padding-top:8px;border-top:1px solid #eee}
+#addDay{min-height:48px}
 </style></head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Wypełnij raport na iPadzie</div></header>
@@ -85,53 +92,63 @@ const $=id=>document.getElementById(id); let companies=[];
 const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signdate").value=today;
 
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
-for(let d=1;d<=6;d++){
-  $("times").insertAdjacentHTML("beforeend",`
-  <div class="daybox">
+let visibleDays=1;
+function dayTemplate(d){
+  return `
+  <div class="daybox" data-daybox="${d}">
     <h3>Tag ${d}</h3>
     <div class="field"><label>Datum</label><input type="date" data-day="${d}" class="daydate"></div>
 
     <div class="sectiontitle">Anfahrt</div>
     <div class="row">
-      <div class="field"><label>Von – Abfahrt</label><input type="time" data-k="RZstart${(d*2)-1}" aria-label="Anfahrt von"></div>
-      <div class="field"><label>Bis – Ankunft</label><input type="time" data-k="RZende${(d*2)-1}" aria-label="Anfahrt bis"></div>
+      <div class="field"><label>Anfahrt von – Abfahrt</label><input type="time" data-k="RZstart${(d*2)-1}" aria-label="Anfahrt von"></div>
+      <div class="field"><label>Anfahrt bis – Ankunft</label><input type="time" data-k="RZende${(d*2)-1}" aria-label="Anfahrt bis"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Pause während Fahrt</label><input type="time" data-k="PauseRZ${(d*2)-1}" value="00:00" aria-label="Pause Fahrt"></div>
+      <div class="field"><label>Pause während Fahrt</label><input type="time" data-k="PauseRZ${(d*2)-1}" value="00:00"></div>
       <div class="field"><label>Reisezeit netto</label><input type="text" data-calc="rt${d}" readonly></div>
     </div>
     <div class="row">
-      <div class="field"><label>KM Anfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${(d*2)-1}" placeholder="KM"></div>
-      <div class="field"><label>Arbeitszeit netto</label><input type="text" data-calc="wt${d}" readonly></div>
+      <div class="field"><label>KM Anfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${(d*2)-1}" placeholder="KM Anfahrt"></div>
     </div>
 
     <div class="sectiontitle">Arbeitszeit</div>
     <div class="row">
-      <div class="field"><label>Von – Arbeitsbeginn</label><input type="time" data-k="AZstart${(d*2)-1}" aria-label="Arbeitszeit von"></div>
-      <div class="field"><label>Bis – Arbeitsende</label><input type="time" data-k="AZende${(d*2)-1}" aria-label="Arbeitszeit bis"></div>
+      <div class="field"><label>Arbeitszeit von – Arbeitsbeginn</label><input type="time" data-k="AZstart${(d*2)-1}"></div>
+      <div class="field"><label>Arbeitszeit bis – Arbeitsende</label><input type="time" data-k="AZende${(d*2)-1}"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Pause Arbeit</label><input type="time" data-k="PauseAZ${(d*2)-1}" value="00:00" aria-label="Pause Arbeit"></div>
-      <div class="field"><label>Arbeitszeit netto</label><input type="text" data-calc="wt2${d}" readonly></div>
+      <div class="field"><label>Pause Arbeit</label><input type="time" data-k="PauseAZ${(d*2)-1}" value="00:00"></div>
+      <div class="field"><label>Arbeitszeit netto</label><input type="text" data-calc="wt${d}" readonly></div>
     </div>
 
     <div class="sectiontitle">Rückfahrt</div>
     <div class="row">
-      <div class="field"><label>Von – Abfahrt</label><input type="time" data-k="RZstart${d*2}" aria-label="Rückfahrt von"></div>
-      <div class="field"><label>Bis – Ankunft zuhause</label><input type="time" data-k="RZende${d*2}" aria-label="Rückfahrt bis"></div>
+      <div class="field"><label>Rückfahrt von – Abfahrt</label><input type="time" data-k="RZstart${d*2}"></div>
+      <div class="field"><label>Rückfahrt bis – Ankunft zuhause</label><input type="time" data-k="RZende${d*2}"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Pause während Rückfahrt</label><input type="time" data-k="PauseRZ${d*2}" value="00:00" aria-label="Pause Rückfahrt"></div>
+      <div class="field"><label>Pause während Rückfahrt</label><input type="time" data-k="PauseRZ${d*2}" value="00:00"></div>
       <div class="field"><label>Reisezeit netto</label><input type="text" data-calc="rr${d}" readonly></div>
     </div>
     <div class="row">
-      <div class="field"><label>KM Rückfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${d*2}" placeholder="KM"></div>
+      <div class="field"><label>KM Rückfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${d*2}" placeholder="KM Rückfahrt"></div>
       <div class="field"><label>Gesamtzeit netto</label><input type="text" data-calc="total${d}" readonly></div>
     </div>
-    <div class="muted" id="routeInfo${d}">${d===1?"Po wybraniu firmy dzień 1 pobiera km i czas jazdy z listy klienta.":"KM tego dnia możesz wpisać ręcznie. Czas jazdy i pracy liczy się z godzin von/bis."}</div>
-  </div>`);
+    <div class="muted" id="routeInfo${d}">${d===1?"Po wybraniu firmy dzień 1 pobiera km i czas jazdy z listy klienta.":"KM tego dnia wpisujesz ręcznie. Czas jazdy i pracy liczy się automatycznie."}</div>
+  </div>`;
 }
-
+$("times").innerHTML=dayTemplate(1)+`
+  <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Dodaj kolejny dzień</button>
+`;
+$("addDay").onclick=()=>{
+  if(visibleDays>=6)return;
+  visibleDays++;
+  $("addDay").insertAdjacentHTML("beforebegin",dayTemplate(visibleDays));
+  bindTimeInputs();
+  recalcTimes();
+  if(visibleDays>=6)$("addDay").style.display="none";
+};
 function parseRoute(c){
   // Existing companies.json format: e.g. "115 km, 1,75 h"
   const text=Object.values(c||{}).filter(v=>typeof v==="string").join(" ");
@@ -233,22 +250,31 @@ function recalcTimes(){
   if($("kmTotal"))$("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
   if($("allTotal"))$("allTotal").value=fmtMin(travel+work);
 }
-document.querySelectorAll("#times input").forEach(el=>el.addEventListener("input",()=>{
-  const key=el.dataset.k||"";
-  if((key==="RZstart1"||key==="RZende1"||key==="RZstart2"||key==="RZende2") && companies?.length){
-    const r=customerRoute();
-    if(r.minutes && el.value){
-      const pairs={RZstart1:"RZende1",RZende1:"RZstart1",RZstart2:"RZende2",RZende2:"RZstart2"};
-      const other=document.querySelector(`[data-k="${pairs[key]}"]`);
-      if(other){
-        other.value=key.startsWith("RZstart")
-          ? addMinutesToTime(el.value,r.minutes)
-          : addMinutesToTime(el.value,-r.minutes);
+function bindTimeInputs(){
+  document.querySelectorAll("#times input").forEach(el=>{
+    if(el.dataset.bound==="1") return;
+    el.dataset.bound="1";
+    el.addEventListener("input",()=>{
+      const key=el.dataset.k||"";
+      const c=companies && companies[+$("company").value];
+      if(c){
+        const r=parseRoute(c);
+        const pairs={RZstart1:"RZende1",RZende1:"RZstart1",RZstart2:"RZende2",RZende2:"RZstart2"};
+        const other=pairs[key];
+        if(other && r.minutes && el.value){
+          const target=document.querySelector(`[data-k="${other}"]`);
+          if(target){
+            target.value=key.startsWith("RZstart")
+              ? addMinutesToTime(el.value,r.minutes)
+              : addMinutesToTime(el.value,-r.minutes);
+          }
+        }
       }
-    }
-  }
-  recalcTimes();
-}));
+      recalcTimes();
+    });
+  });
+}
+bindTimeInputs();
 recalcTimes();
 
 $("generate").onclick=async()=>{
