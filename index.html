@@ -806,51 +806,76 @@ $("share").onclick=async()=>{
 })();
 </script>
 
+
 <script>
 (function(){
-  function setupSavePdf(){
+  function setupSaveAsPdf(){
     const btn=document.getElementById("savePdf");
-    if(!btn || btn.dataset.bound==="1") return;
-    btn.dataset.bound="1";
+    if(!btn || btn.dataset.saveasBound==="1") return;
+    btn.dataset.saveasBound="1";
 
-    btn.addEventListener("click",function(){
+    // Use the File System Access API where supported (Chrome/Edge on desktop).
+    // On iPad/Safari the native download/share mechanism is used; Safari
+    // decides the destination via its own Files UI.
+    btn.addEventListener("click",async function(){
       if(!window.lastPdfBlob){
         const status=document.getElementById("status");
         if(status) status.textContent="Bitte zuerst „PDF erstellen“ klicken.";
         return;
       }
 
-      const filename="Service-Bericht.pdf";
+      const defaultName="Service-Bericht.pdf";
+
+      try{
+        if(window.showSaveFilePicker){
+          const handle=await window.showSaveFilePicker({
+            suggestedName:defaultName,
+            types:[{
+              description:"PDF-Datei",
+              accept:{"application/pdf":[".pdf"]}
+            }]
+          });
+          const writable=await handle.createWritable();
+          await writable.write(window.lastPdfBlob);
+          await writable.close();
+          const status=document.getElementById("status");
+          if(status) status.textContent="PDF wurde gespeichert.";
+          return;
+        }
+      }catch(e){
+        if(e && e.name==="AbortError") return;
+      }
+
+      // iPad/iPhone Safari: create a download and let the browser's Files
+      // destination picker handle the location. The filename can be changed
+      // by the user in the Files save sheet.
       const url=URL.createObjectURL(window.lastPdfBlob);
       const a=document.createElement("a");
       a.href=url;
-      a.download=filename;
+      a.download=defaultName;
       a.style.display="none";
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(function(){URL.revokeObjectURL(url);},3000);
+      setTimeout(function(){URL.revokeObjectURL(url);},5000);
 
       const status=document.getElementById("status");
-      if(status) status.textContent="PDF wurde gespeichert.";
+      if(status) status.textContent="PDF zum Speichern geöffnet.";
     });
 
-    // The original app enables #share after generating the PDF.
-    // Mirror that state for the save button without changing PDF generation.
     const share=document.getElementById("share");
     if(share){
-      const observer=new MutationObserver(function(){
-        btn.disabled=share.disabled;
-      });
+      const sync=function(){btn.disabled=share.disabled;};
+      const observer=new MutationObserver(sync);
       observer.observe(share,{attributes:true,attributeFilter:["disabled"]});
-      btn.disabled=share.disabled;
+      sync();
     }
   }
 
   if(document.readyState==="loading")
-    document.addEventListener("DOMContentLoaded",setupSavePdf);
+    document.addEventListener("DOMContentLoaded",setupSaveAsPdf);
   else
-    setupSavePdf();
+    setupSaveAsPdf();
 })();
 </script>
 </body>
