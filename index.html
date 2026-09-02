@@ -50,7 +50,15 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <section class="card"><h2>Bemerkungen</h2><textarea id="remarks" placeholder="- Software-Update durchgeführt.&#10;- ..."></textarea></section>
 <section class="card"><h2>Ersatzteile</h2><textarea id="parts" placeholder="- ..."></textarea></section>
 
-<section class="card"><h2>Reise- und Arbeitszeit</h2><div id="times"></div><div class="muted">Kilometry zostaną zsumowane.</div></section>
+<section class="card"><h2>Reise- und Arbeitszeit</h2>
+<div id="times"></div>
+<div class="grid" style="margin-top:12px">
+<div><label>Reisezeit gesamt</label><input id="travelTotal" readonly></div>
+<div><label>Arbeitszeit gesamt</label><input id="workTotal" readonly></div>
+<div><label>Kilometer gesamt</label><input id="kmTotal" readonly></div>
+<div><label>Gesamtzeit</label><input id="allTotal" readonly></div>
+</div>
+<div class="muted">Wpisz godzinę „von” i „bis”. Czasy oraz kilometry są liczone automatycznie.</div></section>
 
 <section class="card"><h2>Podpis</h2>
 <div class="grid"><div><label>Auftrags-Nr.</label><input id="order"></div><div><label>Techniker</label><input id="tech" value="S.Pawlina"></div>
@@ -58,7 +66,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 <div id="status"></div>
 </main>
-<div class="bottom"><button class="clear" onclick="location.reload()">Wyczyść</button><button class="go" id="generate">Generuj PDF</button></div>
+<div class="bottom"><button class="clear" onclick="location.reload()">Wyczyść</button><button class="go" id="generate">Generuj PDF</button><button class="go" id="share" disabled>📎 Udostępnij PDF</button></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
 const $=id=>document.getElementById(id); let companies=[];
@@ -78,6 +86,55 @@ $("company").onchange=()=>{let c=companies[+$("company").value];if(!c)return;let
 
 function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
 function ls(t){return t.split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean)}
+
+function minutesBetween(a,b){
+  if(!a||!b) return 0;
+  const pa=a.trim().split(":").map(Number), pb=b.trim().split(":").map(Number);
+  if(pa.length<2||pb.length<2||pa.some(Number.isNaN)||pb.some(Number.isNaN)) return 0;
+  let x=pa[0]*60+pa[1], y=pb[0]*60+pb[1];
+  if(y<x) y+=24*60;
+  return y-x;
+}
+function fmtMin(m){
+  m=Math.max(0,Math.round(m));
+  return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+}
+function recalcTimes(){
+  let travel=0, work=0, km=0;
+  document.querySelectorAll(".row").forEach(row=>{
+    const vals=[...row.querySelectorAll("input")];
+    if(vals.length<6) return;
+    travel += minutesBetween(vals[1].value, vals[2].value);
+    work += minutesBetween(vals[3].value, vals[4].value);
+    km += parseFloat((vals[5].value||"").replace(",","."))||0;
+  });
+  $("travelTotal").value=fmtMin(travel);
+  $("workTotal").value=fmtMin(work);
+  $("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
+  $("allTotal").value=fmtMin(travel+work);
+}
+document.querySelectorAll("#times input").forEach(el=>el.addEventListener("input",recalcTimes));
+recalcTimes();
+
+
+let lastPdfBlob=null, lastPdfFile=null;
+$("share").onclick=async()=>{
+  if(!lastPdfBlob) return;
+  try{
+    const file=new File([lastPdfBlob],"Service-Bericht.pdf",{type:"application/pdf"});
+    lastPdfFile=file;
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share({title:"Service-Bericht",text:"Service-Bericht PDF",files:[file]});
+    }else{
+      const u=URL.createObjectURL(lastPdfBlob);
+      const a=document.createElement("a");a.href=u;a.download="Service-Bericht.pdf";a.click();
+      setTimeout(()=>URL.revokeObjectURL(u),2000);
+    }
+  }catch(e){
+    if(e.name!=="AbortError") $("status").textContent="Udostępnianie nie powiodło się: "+e.message;
+  }
+};
+
 $("generate").onclick=async()=>{
 $("status").textContent="Generuję PDF…";
 try{
@@ -92,10 +149,31 @@ set(form,"Name Servicetechniker",$("tech").value);set(form,"Datum Unterschrift",
 set(form,"Name Unterschrift Kunde",$("customersign").value);
 let r=ls($("remarks").value);for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,r[i-1]||"");
 let p=ls($("parts").value);for(let i=1;i<=4;i++)set(form,"Ersatzteile "+i,p[i-1]||"");
-let km=0;document.querySelectorAll("[data-k]").forEach(el=>{let k=el.dataset.k,v=el.value;if(k.startsWith("Datum"))v=v?v.split("-").reverse().join("."):"";set(form,k,v);if(k.startsWith("Kilometer"))km+=(parseFloat(el.value.replace(",","."))||0)});set(form,"Kilometer gesamt",String(km));
-form.updateFieldAppearances();form.flatten();let out=await pdf.save(),blob=new Blob([out],{type:"application/pdf"}),url=URL.createObjectURL(blob);
-let a=document.createElement("a");a.href=url;a.download="Service-Bericht.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
-$("status").textContent="Gotowe — PDF zapisany.";
+let km=0, travel=0, work=0;
+document.querySelectorAll("[data-k]").forEach(el=>{
+  let k=el.dataset.k,v=el.value;
+  if(k.startsWith("Datum")) v=v?v.split("-").reverse().join("."):"";
+  set(form,k,v);
+  if(k.startsWith("Kilometer")) km+=(parseFloat((el.value||"").replace(",","."))||0);
+});
+document.querySelectorAll("#times .row").forEach(row=>{
+  const vals=[...row.querySelectorAll("input")];
+  if(vals.length>=6){
+    travel+=minutesBetween(vals[1].value,vals[2].value);
+    work+=minutesBetween(vals[3].value,vals[4].value);
+  }
+});
+set(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","));
+set(form,"Reisezeit gesamt",fmtMin(travel));
+set(form,"Arbeitszeit gesamt",fmtMin(work));
+set(form,"Gesamtzeit",fmtMin(travel+work));
+form.updateFieldAppearances();form.flatten();let out=await pdf.save();
+lastPdfBlob=new Blob([out],{type:"application/pdf"});
+$("share").disabled=false;
+const url=URL.createObjectURL(lastPdfBlob);
+let a=document.createElement("a");a.href=url;a.download="Service-Bericht.pdf";a.click();
+setTimeout(()=>URL.revokeObjectURL(url),2000);
+$("status").textContent="Gotowe — PDF zapisany. Możesz teraz kliknąć „📎 Udostępnij PDF”.";
 }catch(e){$("status").textContent="Błąd: "+e.message}
 };
 </script>
