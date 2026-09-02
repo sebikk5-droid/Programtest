@@ -154,7 +154,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 <div id="status"></div>
 </main>
-<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button class="go" id="share" disabled>📎 PDF teilen</button></div>
+<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button class="go" id="share" disabled>📎 PDF teilen</button><button class="go" id="savePdf" disabled>💾 PDF speichern</button></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js">
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   const k="pdf_"+el.id;
@@ -526,7 +526,7 @@ bindTimeInputs();
 recalcTimes();
 
 $("generate").onclick=async()=>{
-$("status").textContent="Generuję PDF…";
+$("status").textContent="PDF wird erstellt…";
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
 let c=companies[+$("company").value];
@@ -594,7 +594,7 @@ for(let d=1;d<=visibleDays;d++){
 form.updateFieldAppearances();form.flatten();let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("share").disabled=false;
-$("status").textContent="Gotowe — jeden PDF jest przygotowany. Kliknij „📎 PDF teilen”, aby zapisać lub wysłać go.";
+$("status").textContent="Fertig – das PDF ist vorbereitet. Klicken Sie auf „📎 PDF teilen“ zum Teilen.";
 }catch(e){$("status").textContent="Fehler: "+e.message}
 };
 $("share").onclick=async()=>{
@@ -604,19 +604,19 @@ $("share").onclick=async()=>{
     const file=new File([lastPdfBlob],filename,{type:"application/pdf"});
     if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
       await navigator.share({files:[file],title:"Service-Bericht"});
-      $("status").textContent="PDF został udostępniony.";
+      $("status").textContent="PDF wurde geteilt.";
     }else{
       const url=URL.createObjectURL(lastPdfBlob),a=document.createElement("a");
       a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
       setTimeout(()=>URL.revokeObjectURL(url),2000);
-      $("status").textContent="PDF zapisany w Plikach.";
+      $("status").textContent="PDF wurde gespeichert.";
     }
   }catch(e){
-    if(e && e.name==="AbortError"){ $("status").textContent="Udostępnianie anulowane."; return; }
+    if(e && e.name==="AbortError"){ $("status").textContent="Teilen abgebrochen."; return; }
     const url=URL.createObjectURL(lastPdfBlob),a=document.createElement("a");
     a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),2000);
-    $("status").textContent="PDF zapisany w Plikach.";
+    $("status").textContent="PDF wurde gespeichert.";
   }
 };
 
@@ -803,6 +803,54 @@ $("share").onclick=async()=>{
     document.addEventListener("DOMContentLoaded",setupCustomerAutocomplete);
   else
     setupCustomerAutocomplete();
+})();
+</script>
+
+<script>
+(function(){
+  function setupSavePdf(){
+    const btn=document.getElementById("savePdf");
+    if(!btn || btn.dataset.bound==="1") return;
+    btn.dataset.bound="1";
+
+    btn.addEventListener("click",function(){
+      if(!window.lastPdfBlob){
+        const status=document.getElementById("status");
+        if(status) status.textContent="Bitte zuerst „PDF erstellen“ klicken.";
+        return;
+      }
+
+      const filename="Service-Bericht.pdf";
+      const url=URL.createObjectURL(window.lastPdfBlob);
+      const a=document.createElement("a");
+      a.href=url;
+      a.download=filename;
+      a.style.display="none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},3000);
+
+      const status=document.getElementById("status");
+      if(status) status.textContent="PDF wurde gespeichert.";
+    });
+
+    // The original app enables #share after generating the PDF.
+    // Mirror that state for the save button without changing PDF generation.
+    const share=document.getElementById("share");
+    if(share){
+      const observer=new MutationObserver(function(){
+        btn.disabled=share.disabled;
+      });
+      observer.observe(share,{attributes:true,attributeFilter:["disabled"]});
+      btn.disabled=share.disabled;
+    }
+  }
+
+  if(document.readyState==="loading")
+    document.addEventListener("DOMContentLoaded",setupSavePdf);
+  else
+    setupSavePdf();
 })();
 </script>
 </body>
