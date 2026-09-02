@@ -725,78 +725,35 @@ $("share").onclick=async()=>{
 })();
 </script>
 <script>
-(function () {
-  function setupCustomerSearch() {
-    var input = document.getElementById("customerSearch");
-    var select = document.getElementById("company");
-    if (!input || !select || input.getAttribute("data-search-ready") === "1") return;
-    input.setAttribute("data-search-ready", "1");
+(function(){
+  function setupCustomerSearch(){
+    const input=document.getElementById("customerSearch");
+    const select=document.getElementById("company");
+    if(!input || !select || input.dataset.bound==="1") return;
+    input.dataset.bound="1";
 
-    var allOptions = [];
-    function rememberOptions() {
-      allOptions = [];
-      for (var i = 0; i < select.options.length; i++) {
-        var o = select.options[i];
-        allOptions.push({
-          value: o.value,
-          text: o.textContent,
-          disabled: o.disabled
-        });
-      }
-    }
-
-    function filterOptions() {
-      var query = input.value.trim().toLowerCase();
-      var selected = select.value;
-
-      // If companies.json has not finished loading yet, do nothing.
-      // This avoids interfering with the original V26 loading logic.
-      if (allOptions.length === 0 || allOptions[0].textContent === "Ładowanie…") return;
-
-      while (select.firstChild) select.removeChild(select.firstChild);
-
-      for (var i = 0; i < allOptions.length; i++) {
-        var item = allOptions[i];
-        if (!query || item.text.toLowerCase().indexOf(query) !== -1) {
-          var option = document.createElement("option");
-          option.value = item.value;
-          option.textContent = item.text;
-          option.disabled = item.disabled;
-          select.appendChild(option);
-        }
-      }
-
-      // Keep the selected company if it is still visible.
-      for (var j = 0; j < select.options.length; j++) {
-        if (select.options[j].value === selected) {
-          select.selectedIndex = j;
+    function filter(){
+      const q=input.value.trim().toLocaleLowerCase("de-DE");
+      Array.from(select.options).forEach(function(opt){
+        // Keep the placeholder visible.
+        if(opt.value===""){
+          opt.hidden=false;
           return;
         }
-      }
-      if (select.options.length > 0) select.selectedIndex = 0;
+        opt.hidden = !!q && !opt.textContent.toLocaleLowerCase("de-DE").includes(q);
+      });
+
+      // Do NOT change select.value and do NOT dispatch change.
+      // The original V26 company onchange remains fully responsible for
+      // address, contact and travel-time loading.
     }
 
-    // V26 fills the company select asynchronously. Observe only option changes
-    // and take a snapshot after the original loader finishes.
-    var observer = new MutationObserver(function () {
-      var first = select.options[0];
-      if (first && first.textContent !== "Ładowanie…" && allOptions.length === 0) {
-        rememberOptions();
-      }
-    });
-    observer.observe(select, { childList: true });
-
-    // Also capture the list if it is already loaded.
-    if (select.options.length && select.options[0].textContent !== "Ładowanie…") {
-      rememberOptions();
-    }
-
-    input.addEventListener("input", filterOptions);
+    input.addEventListener("input",filter);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", setupCustomerSearch);
-  } else {
+  if(document.readyState==="loading"){
+    document.addEventListener("DOMContentLoaded",setupCustomerSearch);
+  }else{
     setupCustomerSearch();
   }
 })();
