@@ -34,6 +34,11 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .field label{display:block;font-size:13px;font-weight:650;margin:0 0 4px}
 .field input{width:100%;min-height:40px}
 .daybox .row{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:7px 0}
+</style><style>
+.daybox .field label{display:block!important;font-weight:700!important;font-size:13px!important;margin:3px 0 4px!important}
+.daybox input{width:100%;box-sizing:border-box;min-height:40px}
+.daybox{margin:12px 0;padding:12px;border:1px solid #ddd;border-radius:12px}
+.sectiontitle{font-weight:700;margin-top:12px;padding-top:8px;border-top:1px solid #eee}
 </style></head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Wypełnij raport na iPadzie</div></header>
@@ -128,51 +133,70 @@ for(let d=1;d<=6;d++){
 }
 
 function parseRoute(c){
-  const s=String(c?.notatki||"").replace(",",".");
-  const km=(s.match(/(\d+(?:\.\d+)?)\s*km/i)||[])[1];
-  const h=(s.match(/(\d+(?:\.\d+)?)\s*h/i)||[])[1];
-  return {km:km?parseFloat(km):0,minutes:h?Math.round(parseFloat(h)*60):0};
+  // Existing companies.json format: e.g. "115 km, 1,75 h"
+  const text=Object.values(c||{}).filter(v=>typeof v==="string").join(" ");
+  const kmMatch=text.match(/(\d+(?:[.,]\d+)?)\s*km/i);
+  const hMatch=text.match(/(\d+(?:[.,]\d+)?)\s*h\b/i);
+  const km=kmMatch ? parseFloat(kmMatch[1].replace(",",".")) : 0;
+  const hours=hMatch ? parseFloat(hMatch[1].replace(",",".")) : 0;
+  return {km, minutes:Math.round(hours*60)};
 }
 function addMinutesToTime(t,mins){
-  if(!t || !mins)return "";
+  if(!t || !Number.isFinite(mins)) return "";
   const p=t.split(":").map(Number);
-  if(p.length<2||p.some(Number.isNaN))return "";
-  let m=p[0]*60+p[1]+mins; m=((m%1440)+1440)%1440;
+  if(p.length<2 || p.some(Number.isNaN)) return "";
+  let m=p[0]*60+p[1]+mins;
+  m=((m%1440)+1440)%1440;
   return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
 }
-function fillCustomerDay1(){
-  const c=companies && companies[+$("company").value]; if(!c)return;
-  const r=parseRoute(c);
-  const q=k=>document.querySelector(`[data-k="${k}"]`);
+function customerRoute(){
+  if(!Array.isArray(companies)) return {km:0,minutes:0};
+  return parseRoute(companies[+$("company").value]);
+}
+function applyCustomerRouteDay1(){
+  const r=customerRoute();
+  const km1=document.querySelector('[data-k="Kilometer1"]');
+  const km2=document.querySelector('[data-k="Kilometer2"]');
   if(r.km){
-    if(q("Kilometer1"))q("Kilometer1").value=r.km;
-    if(q("Kilometer2"))q("Kilometer2").value=r.km;
+    if(km1) km1.value=r.km;
+    if(km2) km2.value=r.km;
   }
+  const a1=document.querySelector('[data-k="RZstart1"]');
+  const a2=document.querySelector('[data-k="RZende1"]');
+  const b1=document.querySelector('[data-k="RZstart2"]');
+  const b2=document.querySelector('[data-k="RZende2"]');
   if(r.minutes){
-    const a=q("RZstart1"),ae=q("RZende1"),b=q("RZstart2"),be=q("RZende2");
-    if(a&&ae&&a.value)ae.value=addMinutesToTime(a.value,r.minutes);
-    if(b&&be&&b.value)be.value=addMinutesToTime(b.value,r.minutes);
+    if(a1?.value) a2.value=addMinutesToTime(a1.value,r.minutes);
+    else if(a2?.value) a1.value=addMinutesToTime(a2.value,-r.minutes);
+    if(b1?.value) b2.value=addMinutesToTime(b1.value,r.minutes);
+    else if(b2?.value) b1.value=addMinutesToTime(b2.value,-r.minutes);
   }
-  $("routeInfo1").textContent=r.km&&r.minutes
-    ? `Z listy klienta: ${r.km} km i ${fmtMin(r.minutes)} jazdy w jedną stronę. Wpisz godzinę wyjazdu LUB przyjazdu — druga zostanie wyliczona.`
-    : "Brak kompletnych danych jazdy dla tej firmy.";
+  const info=$("routeInfo1");
+  if(info) info.textContent=r.km||r.minutes
+    ? `Klient: ${r.km||0} km / ${fmtMin(r.minutes)} jazdy w jedną stronę. Wpisz Von LUB Bis — druga godzina zostanie wyliczona.`
+    : "Dla tej firmy nie znaleziono km/czasu jazdy w danych klienta.";
   recalcTimes();
 }
-
-fetch("companies.json").then(r=>r.json()).then(x=>{
-  companies=x;
-  $("company").innerHTML='<option value="">— wybierz firmę —</option>'+x.map((c,i)=>`<option value="${i}">${c.firma}</option>`).join("");
+fetch("companies.json").then(r=>{
+  if(!r.ok) throw new Error("companies.json HTTP "+r.status);
+  return r.json();
+}).then(x=>{
+  companies=Array.isArray(x)?x:[];
+  $("company").innerHTML='<option value="">— wybierz firmę —</option>'+
+    companies.map((c,i)=>`<option value="${i}">${c.firma||c.name||"Firma "+(i+1)}</option>`).join("");
   $("company").onchange=()=>{
     const c=companies[+$("company").value];
     if(!c)return;
-    const a=address(c.adres);
-    $("street").value=a[0]; $("city").value=a[1];
-    fillCustomerDay1();
+    const a=address(c.adres||c.address||"");
+    if($("street")) $("street").value=a[0]||"";
+    if($("city")) $("city").value=a[1]||"";
+    applyCustomerRouteDay1();
   };
 }).catch(err=>{
-  console.error(err);
-  $("company").innerHTML='<option value="">Nie udało się wczytać firm</option>';
+  console.error("companies.json:",err);
+  $("company").innerHTML='<option value="">Błąd wczytywania firm</option>';
 });
+
 
 function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
 function ls(t){return t.split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean)}
@@ -201,26 +225,25 @@ function recalcTimes(){
     travel+=rt+rr; work+=wt;
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
-    const setcalc=(name,val)=>{const el=document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
-    setcalc(`rt${d}`,rt); setcalc(`wt${d}`,wt); setcalc(`wt2${d}`,wt); setcalc(`rr${d}`,rr); setcalc(`total${d}`,rt+wt+rr);
+    const sc=(name,val)=>{const el=document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
+    sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
   }
-  $("travelTotal").value=fmtMin(travel);
-  $("workTotal").value=fmtMin(work);
-  $("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
-  $("allTotal").value=fmtMin(travel+work);
+  if($("travelTotal"))$("travelTotal").value=fmtMin(travel);
+  if($("workTotal"))$("workTotal").value=fmtMin(work);
+  if($("kmTotal"))$("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
+  if($("allTotal"))$("allTotal").value=fmtMin(travel+work);
 }
-
 document.querySelectorAll("#times input").forEach(el=>el.addEventListener("input",()=>{
   const key=el.dataset.k||"";
-  const c=companies && companies[+$("company").value];
-  if(c){
-    const r=parseRoute(c);
-    const pairs={RZstart1:"RZende1",RZende1:"RZstart1",RZstart2:"RZende2",RZende2:"RZstart2"};
-    const other=pairs[key];
-    if(other && r.minutes && el.value){
-      const target=document.querySelector(`[data-k="${other}"]`);
-      if(target){
-        target.value=key.startsWith("RZstart")?addMinutesToTime(el.value,r.minutes):addMinutesToTime(el.value,-r.minutes);
+  if((key==="RZstart1"||key==="RZende1"||key==="RZstart2"||key==="RZende2") && companies?.length){
+    const r=customerRoute();
+    if(r.minutes && el.value){
+      const pairs={RZstart1:"RZende1",RZende1:"RZstart1",RZstart2:"RZende2",RZende2:"RZstart2"};
+      const other=document.querySelector(`[data-k="${pairs[key]}"]`);
+      if(other){
+        other.value=key.startsWith("RZstart")
+          ? addMinutesToTime(el.value,r.minutes)
+          : addMinutesToTime(el.value,-r.minutes);
       }
     }
   }
