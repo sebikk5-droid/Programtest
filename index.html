@@ -301,7 +301,7 @@ document.getElementById("times").addEventListener("change",function(e){
     el.removeAttribute("data-manual");
 
     const key=el.dataset.k||"";
-    const m=key.match(/^(RZstart|RZende|AZstart|AZende)(\\d+)$/);
+    const m=key.match(/^(RZstart|RZende|AZstart|AZende)(\d+)$/);
     if(m){
       const row=parseInt(m[2],10);
       const d=Math.ceil(row/2);
@@ -314,19 +314,20 @@ document.getElementById("times").addEventListener("change",function(e){
         const b1=field("RZstart",backRow), b2=field("RZende",backRow);
         const pause=field("PauseRZ",backRow);
         const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
+        const duration=r.minutes+pauseMin;
 
-        if(row===outRow){
-          if(a1===el && a2) a2.value=a1.value ? addMinutesToTime(a1.value,r.minutes) : "";
-          if(a2===el && a1) a1.value=a2.value ? addMinutesToTime(a2.value,-r.minutes) : "";
+        if(row===outRow && a1 && a2){
+          if(el===a1 && a2) a2.value=a1.value ? addMinutesToTime(a1.value,r.minutes) : "";
+          if(el===a2 && a1) a1.value=a2.value ? addMinutesToTime(a2.value,-r.minutes) : "";
         }
-
-        if(row===backRow){
-          const duration=r.minutes+pauseMin;
-          if(b1===el && b2) b2.value=b1.value ? addMinutesToTime(b1.value,duration) : "";
-          if(b2===el && b1) b1.value=b2.value ? addMinutesToTime(b2.value,-duration) : "";
+        if(row===backRow && b1 && b2){
+          if(el===b1 && b2) b2.value=b1.value ? addMinutesToTime(b1.value,duration) : "";
+          if(el===b2 && b1) b1.value=b2.value ? addMinutesToTime(b2.value,-duration) : "";
         }
       }
     }
+    // Do not let the generic manual-time handler reclassify this cleared field.
+    // Rebind after the reset so the next non-empty change works normally.
     recalcTimes();
     return;
   }
