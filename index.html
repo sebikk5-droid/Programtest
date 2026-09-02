@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Service Bericht">
+<meta name="apple-touch-fullscreen" content="yes">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Service Bericht</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f2f2f7;color:#111;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
+header{background:#fff;padding:calc(12px + env(safe-area-inset-top)) 18px 14px;border-bottom:1px solid #ddd;position:sticky;top:0;z-index:4}
+h1{font-size:25px;margin:0;font-weight:750}.muted{color:#777;font-size:13px;margin-top:3px}
+main{max-width:760px;margin:auto;padding:12px 14px 110px}.card{background:#fff;border-radius:15px;margin:10px 0;padding:15px;box-shadow:0 1px 3px #00000012}
+h2{font-size:17px;margin:0 0 12px}label{font-size:12px;font-weight:650;color:#555;display:block;margin:9px 0 5px}
+input,select,textarea{width:100%;font:inherit;font-size:16px;padding:11px 12px;border:1px solid #d1d1d6;border-radius:11px;background:#fff;color:#111}
+textarea{min-height:130px;resize:vertical}.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}.full{grid-column:1/-1}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:7px 0}.row input{font-size:14px}
+.bottom{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #ddd;padding:9px 14px calc(9px + env(safe-area-inset-bottom));display:flex;gap:8px;z-index:5}
+button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weight:700}.go{background:#111;color:#fff}.clear{background:#e5e5ea}
+#status{font-size:13px;color:#555;margin:7px 2px}
+@media(max-width:520px){.grid{grid-template-columns:1fr}.full{grid-column:auto}}
+@media (min-width: 900px){main{max-width:1000px;padding-left:24px;padding-right:24px}.card{padding:20px}.grid{grid-template-columns:1fr 1fr}.row{grid-template-columns:repeat(6,1fr)}}
+@media (orientation:landscape) and (min-width: 900px){.grid{grid-template-columns:repeat(2,1fr)}}
+.install-note{background:#eef2ff;border-radius:12px;padding:10px 12px;font-size:13px;margin-top:10px;color:#374151}
+</style>
+</head>
+<body>
+<header><h1>Service-Bericht</h1><div class="muted">Wypełnij raport na iPhonie</div></header>
+<main>
+<section class="card"><h2>Klient</h2>
+<label>Firma</label><select id="company"><option>Ładowanie…</option></select>
+<div class="grid">
+<div><label>Straße</label><input id="street"></div><div><label>PLZ, Ort</label><input id="city"></div>
+<div><label>Ansprechpartner</label><input id="contact"></div><div><label>Einsatzdatum</label><input id="date" type="date"></div>
+</div></section>
+
+<section class="card"><h2>Maszyna</h2>
+<div class="grid">
+<div><label>Hersteller</label><input id="manufacturer"></div><div><label>Typ</label><input id="type"></div>
+<div><label>Nr.</label><input id="machineNo"></div><div><label>Steuerungstyp</label><input id="control"></div>
+<div><label>NC-Nr.</label><input id="nc"></div><div><label>PLC-Nr.</label><input id="plc"></div>
+<div class="full"><label>Maschinenstörung</label><input id="fault"></div>
+<div class="full"><label>Betriebsstunden</label><input id="hours"></div>
+</div></section>
+
+<section class="card"><h2>Bemerkungen</h2><textarea id="remarks" placeholder="- Software-Update durchgeführt.&#10;- ..."></textarea></section>
+<section class="card"><h2>Ersatzteile</h2><textarea id="parts" placeholder="- ..."></textarea></section>
+
+<section class="card"><h2>Reise- und Arbeitszeit</h2><div id="times"></div><div class="muted">Kilometry zostaną zsumowane.</div></section>
+
+<section class="card"><h2>Podpis</h2>
+<div class="grid"><div><label>Auftrags-Nr.</label><input id="order"></div><div><label>Techniker</label><input id="tech" value="S.Pawlina"></div>
+<div><label>Datum</label><input id="signdate" type="date"></div><div><label>Name Kunde</label><input id="customersign"></div></div>
+</section>
+<div id="status"></div>
+</main>
+<div class="bottom"><button class="clear" onclick="location.reload()">Wyczyść</button><button class="go" id="generate">Generuj PDF</button></div>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script>
+const $=id=>document.getElementById(id); let companies=[];
+const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signdate").value=today;
+
+function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
+for(let i=1;i<=8;i++) $("times").insertAdjacentHTML("beforeend",`<div class="row">
+<input type="date" data-k="Datum${i}"><input placeholder="Reise von" data-k="RZstart${i}">
+<input placeholder="Reise bis" data-k="RZende${i}"><input placeholder="Arbeit von" data-k="AZstart${i}">
+<input placeholder="Arbeit bis" data-k="AZende${i}"><input inputmode="decimal" placeholder="Kilometer" data-k="Kilometer${i}">
+</div>`);
+
+fetch("companies.json").then(r=>r.json()).then(x=>{
+companies=x; $("company").innerHTML='<option value="">— wybierz firmę —</option>'+x.map((c,i)=>`<option value="${i}">${c.firma}</option>`).join("");
+$("company").onchange=()=>{let c=companies[+$("company").value];if(!c)return;let a=address(c.adres);$("street").value=a[0];$("city").value=a[1]};
+});
+
+function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
+function ls(t){return t.split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean)}
+$("generate").onclick=async()=>{
+$("status").textContent="Generuję PDF…";
+try{
+let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
+let c=companies[+$("company").value];
+set(form,"Firma",c?c.firma:$("company").value);set(form,"Straße",$("street").value);set(form,"PLZ, Ort",$("city").value);
+set(form,"Ansprechpartner",$("contact").value);set(form,"Datum Einsatzbeginn",$("date").value.split("-").reverse().join("."));
+set(form,"Hersteller",$("manufacturer").value);set(form,"Typ",$("type").value);set(form,"Maschinennummer",$("machineNo").value);
+set(form,"Steuerung",$("control").value);set(form,"NC Version",$("nc").value);set(form,"PLC Version",$("plc").value);
+set(form,"Störung",$("fault").value);set(form,"Betriebsstunden",$("hours").value);set(form,"Auftrags-Nr",$("order").value);
+set(form,"Name Servicetechniker",$("tech").value);set(form,"Datum Unterschrift",$("signdate").value.split("-").reverse().join("."));
+set(form,"Name Unterschrift Kunde",$("customersign").value);
+let r=ls($("remarks").value);for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,r[i-1]||"");
+let p=ls($("parts").value);for(let i=1;i<=4;i++)set(form,"Ersatzteile "+i,p[i-1]||"");
+let km=0;document.querySelectorAll("[data-k]").forEach(el=>{let k=el.dataset.k,v=el.value;if(k.startsWith("Datum"))v=v?v.split("-").reverse().join("."):"";set(form,k,v);if(k.startsWith("Kilometer"))km+=(parseFloat(el.value.replace(",","."))||0)});set(form,"Kilometer gesamt",String(km));
+form.updateFieldAppearances();form.flatten();let out=await pdf.save(),blob=new Blob([out],{type:"application/pdf"}),url=URL.createObjectURL(blob);
+let a=document.createElement("a");a.href=url;a.download="Service-Bericht.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
+$("status").textContent="Gotowe — PDF zapisany.";
+}catch(e){$("status").textContent="Błąd: "+e.message}
+};
+</script>
+</body>
+</html>
