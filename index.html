@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pl">
+<html lang="de" lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
@@ -148,7 +148,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </div>
 <div class="muted">Jeden Tag werden zwei Zeilen im Bericht verwendet: 1. Anfahrt + Arbeit, 2. Rückfahrt. Pausen werden automatisch abgezogen.</div></section>
 
-<section class="card"><h2>Podpis</h2>
+<section class="card"><h2>Unterschrift</h2>
 <div class="grid"><div><label>Auftrags-Nr.</label><input id="order"></div><div><label>Techniker</label><input id="tech" value="S.Pawlina"></div>
 <div><label>Datum</label><input id="signdate" type="date"></div><div><label>Name Kunde</label><input id="customersign"></div></div>
 </section>
@@ -225,7 +225,7 @@ function dayTemplate(d){
       <div class="field"><label>KM Rückfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${d*2}" placeholder="KM Rückfahrt"></div>
       <div class="field"><label>Gesamtzeit netto</label><input type="text" data-calc="total${d}" readonly></div>
     </div>
-    <div class="muted" id="routeInfo${d}">${d===1?"Po wybraniu firmy dzień 1 pobiera km i czas jazdy z listy klienta.":"KM tego dnia wpisujesz ręcznie. Czas jazdy i pracy liczy się automatycznie."}</div>
+    <div class="muted" id="routeInfo${d}">${d===1?"Po wybraniu firmy dzień 1 pobiera km i czas jazdy z listy klienta.":"KM tego dnia wpisujesz ręcznie. Zeit jazdy i pracy liczy się automatycznie."}</div>
   </div>`;
 }
 $("times").innerHTML=dayTemplate(1)+`
@@ -595,7 +595,7 @@ form.updateFieldAppearances();form.flatten();let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("share").disabled=false;
 $("status").textContent="Gotowe — jeden PDF jest przygotowany. Kliknij „📎 Udostępnij PDF”, aby zapisać lub wysłać go.";
-}catch(e){$("status").textContent="Błąd: "+e.message}
+}catch(e){$("status").textContent="Fehler: "+e.message}
 };
 $("share").onclick=async()=>{
   if(!lastPdfBlob){$("status").textContent="Najpierw kliknij „PDF erstellen”.";return;}
