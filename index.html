@@ -629,10 +629,21 @@ function bindTimeInputs(){
 
       // EXACTLY the day-1 "Reisezeit ändern" behavior, scoped to this day.
       if(el.dataset.routeOverride==="out" || el.dataset.routeOverride==="back"){
-        const val=Math.max(0,parseInt(el.value,10)||0);
+        // Empty Reisezeit ändern = manual correction cancelled.
+        // IMPORTANT: do not convert "" to 0 minutes. Restore the customer's
+        // original route time instead.
+        const isEmpty=String(el.value??"").trim()==="";
+        const val=isEmpty ? r.minutes : Math.max(0,parseInt(el.value,10)||0);
+
+        if(isEmpty){
+          el.value="";
+          el.dataset.manual="0";
+          el.removeAttribute("data-manual");
+        }
+
         if(el.dataset.routeOverride==="out"){
           const a1=field("RZstart",outRow),a2=field("RZende",outRow);
-          if(a1&&a2&&val>=0){
+          if(a1&&a2&&val>0){
             if(a2.value)a1.value=addMinutesToTime(a2.value,-val);
             else if(a1.value)a2.value=addMinutesToTime(a1.value,val);
           }
@@ -642,7 +653,7 @@ function bindTimeInputs(){
           const b1=field("RZstart",backRow),b2=field("RZende",backRow);
           const pause=field("PauseRZ",backRow);
           const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
-          if(b1&&b2&&val>=0){
+          if(b1&&b2&&val>0){
             if(b1.value)b2.value=addMinutesToTime(b1.value,val+pauseMin);
             else if(b2.value)b1.value=addMinutesToTime(b2.value,-(val+pauseMin));
           }
