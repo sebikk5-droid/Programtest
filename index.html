@@ -55,6 +55,16 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 @media print{
   .daybox[data-daybox]:not([data-day-active="1"]){display:none!important}
 }
+</style><style>
+#pdfFields{margin:12px 0}
+#pdfFields textarea,#pdfFields input{width:100%;box-sizing:border-box;min-height:40px}
+#pdfFields label{display:block;font-weight:700;font-size:13px;margin:3px 0 4px}
+</style><style>
+#choices{margin:12px 0}
+#choices h3{margin:8px 0;font-size:16px}
+.choice-group{border:1px solid #ddd;border-radius:10px;padding:10px;margin:8px 0}
+.choice-group .check{display:inline-flex;align-items:center;gap:8px;margin:6px 14px 6px 0;font-weight:600}
+.choice-group input[type=checkbox]{width:22px;height:22px;min-height:22px}
 </style></head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Wypełnij raport na iPadzie</div></header>
@@ -79,6 +89,34 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <section class="card"><h2>Ersatzteile</h2><textarea id="parts" placeholder="- ..."></textarea></section>
 
 <section class="card"><h2>Reise- und Arbeitszeit</h2>
+
+<div id="choices" class="card">
+  <h2>Auswahl</h2>
+
+  <div class="choice-group">
+    <h3>Betriebsbereitschaft</h3>
+    <label class="check"><input type="checkbox" name="betriebs" value="io"> i.O.</label>
+    <label class="check"><input type="checkbox" name="betriebs" value="bedingt"> bedingt betriebsbereit</label>
+    <label class="check"><input type="checkbox" name="betriebs" value="nicht"> nicht betriebsbereit</label>
+  </div>
+
+  <div class="choice-group">
+    <h3>Neuer Einsatz erforderlich?</h3>
+    <label class="check"><input type="checkbox" name="einsatz" value="nein"> nein</label>
+    <label class="check"><input type="checkbox" name="einsatz" value="ja"> ja</label>
+  </div>
+
+  <div class="choice-group">
+    <h3>Art des Einsatzes</h3>
+    <label class="check"><input type="checkbox" name="art" value="el"> El.</label>
+    <label class="check"><input type="checkbox" name="art" value="mech"> Mech.</label>
+    <label class="check"><input type="checkbox" name="art" value="anw"> Anw. Tech.</label>
+  </div>
+
+  <div class="choice-group">
+    <label class="check"><input id="maschine_ok" type="checkbox"> Maschine in ordnungsgemäßem Zustand übernommen</label>
+  </div>
+</div>
 <div id="times"></div>
 <div class="grid" style="margin-top:12px">
 <div><label>Reisezeit gesamt</label><input id="travelTotal" readonly></div>
@@ -95,7 +133,23 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <div id="status"></div>
 </main>
 <div class="bottom"><button class="clear" onclick="location.reload()">Wyczyść</button><button class="go" id="generate">Generuj PDF</button><button class="go" id="share" disabled>📎 Udostępnij PDF</button></div>
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js">
+document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
+  const k="pdf_"+el.id;
+  try{el.value=localStorage.getItem(k)||"";}catch(e){}
+  el.addEventListener("input",()=>{try{localStorage.setItem(k,el.value);}catch(e){}});
+});
+
+
+// Auswahl bleibt auf diesem Gerät gespeichert.
+document.querySelectorAll('#choices input').forEach(el=>{
+  const k='choice_'+(el.id||el.name+'_'+el.value);
+  try{el.checked=localStorage.getItem(k)==='1';}catch(e){}
+  el.addEventListener('change',()=>{
+    try{localStorage.setItem(k,el.checked?'1':'0');}catch(e){}
+  });
+});
+</script>
 <script>
 const $=id=>document.getElementById(id); let companies=[];
 const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signdate").value=today;
@@ -293,6 +347,23 @@ function recalcTimes(){
   if($("kmTotal"))$("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
   if($("allTotal"))$("allTotal").value=fmtMin(travel+work);
 }
+
+// Auswahlfelder: innerhalb jeder Gruppe nur eine Option gleichzeitig.
+document.querySelectorAll('#choices input[type="checkbox"][name]').forEach(cb=>{
+  cb.addEventListener('change',()=>{
+    if(cb.checked){
+      document.querySelectorAll('#choices input[name="'+cb.name+'"]').forEach(x=>{
+        if(x!==cb) x.checked=false;
+      });
+    }
+  });
+});
+function pdfCheck(form,name,on){
+  try{
+    const f=form.getCheckBox(name);
+    if(on) f.check(); else f.uncheck();
+  }catch(e){}
+}
 function bindTimeInputs(){
   document.querySelectorAll("#times input").forEach(el=>{
     if(el.dataset.bound==="1") return;
@@ -321,6 +392,21 @@ $("status").textContent="Generuję PDF…";
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
 let c=companies[+$("company").value];
+
+// Auswahl -> Kontrollkästchen des Original-PDFs.
+const bet=document.querySelector('#choices input[name="betriebs"]:checked')?.value||"";
+const ein=document.querySelector('#choices input[name="einsatz"]:checked')?.value||"";
+const art=document.querySelector('#choices input[name="art"]:checked')?.value||"";
+pdfCheck(form,"Kontrollkästchen162",bet==="io");
+pdfCheck(form,"Kontrollkästchen163",bet==="bedingt");
+pdfCheck(form,"Kontrollkästchen164",bet==="nicht");
+pdfCheck(form,"Kontrollkästchen165",ein==="nein");
+pdfCheck(form,"Kontrollkästchen166",ein==="ja");
+pdfCheck(form,"Kontrollkästchen167",art==="el");
+pdfCheck(form,"Kontrollkästchen168",art==="mech");
+pdfCheck(form,"Kontrollkästchen169",art==="anw");
+pdfCheck(form,"Kontrollkästchen1",document.getElementById("maschine_ok").checked);
+
 set(form,"Firma",c?c.firma:$("company").value);set(form,"Straße",$("street").value);set(form,"PLZ, Ort",$("city").value);
 set(form,"Ansprechpartner",$("contact").value);set(form,"Datum Einsatzbeginn",$("date").value.split("-").reverse().join("."));
 set(form,"Hersteller",$("manufacturer").value);set(form,"Typ",$("type").value);set(form,"Maschinennummer",$("machineNo").value);
