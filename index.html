@@ -188,7 +188,8 @@ const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signd
 
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
 let visibleDays=1;
-// Time pickers use 15-minute steps (00/15/30/45).\nfunction dayTemplate(d){
+// Time pickers use 15-minute steps (00/15/30/45).
+function dayTemplate(d){
   return `
   <div class="daybox" data-daybox="${d}">
     <div class="day-header">
