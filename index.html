@@ -237,15 +237,15 @@ $("addDay").onclick=()=>{
   const newDay=visibleDays+1;
 
   $("addDay").insertAdjacentHTML("beforebegin",dayTemplate(newDay));
-  document.querySelector(`[data-daybox="${newDay}"]`)?.setAttribute("data-day-active","1");
+  const box=document.querySelector(`[data-daybox="${newDay}"]`);
+  if(box) box.setAttribute("data-day-active","1");
   visibleDays=newDay;
 
   bindTimeInputs();
 
-  // Initialize the new day exactly like day 1, using the selected customer's
-  // route data. Do not overwrite manual work times from previous days.
-  applyCustomerRouteDay(newDay);
-  recalcTimes();
+  // IMPORTANT: initialize the new day from the selected customer,
+  // not by copying day-1 DOM fields.
+  initNewDayTimes(newDay);
 
   if(visibleDays>=6)$("addDay").style.display="none";
 };
@@ -288,55 +288,6 @@ function addMinutesToTime(t,mins){
 function customerRoute(){
   if(!Array.isArray(companies)) return {km:0,minutes:0};
   return parseRoute(companies[+$("company").value]);
-}
-function applyCustomerRouteDay(d){
-  const r=customerRoute();
-  if(!r.minutes && !r.km) return;
-
-  const aRow=d*2-1, bRow=d*2;
-  const a1=document.querySelector(`[data-k="RZstart${aRow}"]`);
-  const a2=document.querySelector(`[data-k="RZende${aRow}"]`);
-  const b1=document.querySelector(`[data-k="RZstart${bRow}"]`);
-  const b2=document.querySelector(`[data-k="RZende${bRow}"]`);
-  const km1=document.querySelector(`[data-k="Kilometer${aRow}"]`);
-  const km2=document.querySelector(`[data-k="Kilometer${bRow}"]`);
-  const pause=document.querySelector(`[data-k="PauseRZ${bRow}"]`);
-  const workStart=document.querySelector(`[data-k="AZstart${aRow}"]`);
-  const workEnd=document.querySelector(`[data-k="AZende${aRow}"]`);
-
-  const box=document.querySelector(`[data-daybox="${d}"]`);
-  const outOverride=box?.querySelector('[data-route-override="out"]');
-  const backOverride=box?.querySelector('[data-route-override="back"]');
-  const outTime=outOverride?.value!=="" ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
-  const backTime=backOverride?.value!=="" ? Math.max(0,parseInt(backOverride.value,10)||0) : r.minutes;
-
-  if(r.km){
-    if(km1) km1.value=r.km;
-    if(km2) km2.value=r.km;
-  }
-
-  // Ankunft = Arbeitsbeginn.
-  if(a1 && a2 && outTime){
-    if(a2.value) a1.value=addMinutesToTime(a2.value,-outTime);
-    else if(a1.value) a2.value=addMinutesToTime(a1.value,outTime);
-  }
-  if(workStart && a2?.value && workStart.dataset.manual!=="1")
-    workStart.value=a2.value;
-
-  // Arbeitsende = Abreise zur Rückfahrt.
-  if(workEnd?.value && b1 && b1.dataset.manual!=="1")
-    b1.value=workEnd.value;
-  else if(b1?.value && workEnd && workEnd.dataset.manual!=="1")
-    workEnd.value=b1.value;
-
-  if(pause) pause.value="45";
-
-  // Rückfahrt enthält Reisezeit + Pause.
-  const backTotal=backTime+45;
-  if(b1 && b2 && backTotal){
-    if(b1.value) b2.value=addMinutesToTime(b1.value,backTotal);
-    else if(b2.value) b1.value=addMinutesToTime(b2.value,-backTotal);
-  }
 }
 function applyCustomerRouteDay1(){
   const r=customerRoute();
@@ -395,8 +346,7 @@ fetch("companies.json").then(r=>{
     if($("street")) $("street").value=a[0]||"";
     if($("city")) $("city").value=a[1]||"";
     applyCustomerRouteDay1();
-    for(let d=2; d<=visibleDays; d++) applyCustomerRouteDay(d);
-    recalcTimes();
+    for(let d=2; d<=visibleDays; d++) initNewDayTimes(d);
   };
 }).catch(err=>{
   console.error("companies.json:",err);
@@ -490,10 +440,7 @@ function bindTimeInputs(){
 
     el.addEventListener("input",()=>{
       const key=el.dataset.k||"";
-      const kmatch=key.match(/^(?:RZstart|RZende|AZstart|AZende|PauseRZ|PauseAZ)(\\d+)$/);
-      const rowNo=kmatch?parseInt(kmatch[1],10):0;
-      const dayNo=rowNo?Math.ceil(rowNo/2):1;
-      
+
       // Manuelle Änderung der Reisezeit (Minuten) überschreibt die Kundenlistenzeit.
       if(el.dataset.routeOverride==="out" || el.dataset.routeOverride==="back"){
         const r=customerRoute();
@@ -513,25 +460,7 @@ function bindTimeInputs(){
             else if(b2 && b2.value) b1.value=addMinutesToTime(b2.value,-(val+45));
           }
         }
-        if(key===`RZende${dayNo*2-1}`){
-        const az=document.querySelector(`[data-k="AZstart${dayNo*2-1}"]`);
-        if(az && el.value && az.dataset.manual!=="1") az.value=el.value;
-      }
-      if(key===`AZstart${dayNo*2-1}`) el.dataset.manual="1";
-
-      if(key===`AZende${dayNo*2-1}`){
-        const ab=document.querySelector(`[data-k="RZstart${dayNo*2}"]`);
-        if(ab && el.value){
-          ab.value=el.value;
-          ab.dataset.manual="1";
-        }
-      }
-      if(key===`RZstart${dayNo*2}`) {
-        const azEnd=document.querySelector(`[data-k="AZende${dayNo*2-1}"]`);
-        if(azEnd && el.value && azEnd.dataset.manual!=="1") azEnd.value=el.value;
-      }
-
-      recalcTimes();
+        recalcTimes();
         return;
       }
 
