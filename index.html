@@ -75,7 +75,14 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .day-content{display:block}
 .daybox.day-collapsed .day-content{display:none}
 .daybox.day-collapsed .day-collapse::after{content:""}
-</style></head>
+</style><style>
+.day-end-actions{display:flex;justify-content:flex-end;margin-top:10px}
+.btn-day-collapse{padding:7px 12px;border-radius:7px;cursor:pointer}
+.day-collapsed .day-content,
+.day-collapsed .day-body,
+.day-collapsed .day-fields{display:none!important}
+</style>
+</head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
 <main><section class="card"><h2>Kunde</h2>
@@ -258,7 +265,10 @@ function dayTemplate(d){
     </div>
     <div class="muted" id="routeInfo${d}">${d===1?"Po wybraniu firmy dzień 1 pobiera km i czas jazdy z listy klienta.":"KM tego dnia wpisujesz ręcznie. Zeit jazdy i pracy liczy się automatycznie."}</div>
     </div>
-  </div>`;
+  <div class="day-end-actions">
+  <button type="button" class="btn-day-collapse" data-collapse-day="${d}">Einklappen</button>
+</div>
+</div>`;
 }
 $("times").innerHTML=dayTemplate(1)+`
   <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Weiteren Tag hinzufügen</button>
@@ -351,6 +361,16 @@ document.getElementById("times").addEventListener("change",function(e){
   }
 
   recalcTimes();
+});
+
+document.getElementById("times").addEventListener("click",function(e){
+  const btn=e.target.closest(".btn-day-collapse");
+  if(!btn) return;
+  const d=btn.getAttribute("data-collapse-day");
+  const box=document.querySelector(`[data-daybox="${d}"]`);
+  if(!box) return;
+  box.classList.toggle("day-collapsed");
+  btn.textContent=box.classList.contains("day-collapsed")?"Ausklappen":"Einklappen";
 });
 
 // Day controls: collapse or remove a day that was added by mistake.
