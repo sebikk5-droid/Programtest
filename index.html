@@ -961,42 +961,28 @@ $("share").onclick=async()=>{
     const del=document.getElementById("historyDelete");
     const sel=document.getElementById("historySelect");
 
-    // EXISTING „＋ Speichern“:
-    // Save the COMPLETE existing history as one local JSON file.
     save?.addEventListener("click",async()=>{
       try{
         const list=loadHistory();
-        if(!list.length){
-          alert("Die Historie ist leer.");
-          return;
-        }
+        if(!list.length){ alert("Die Historie ist leer."); return; }
 
         const company=document.getElementById("company")?.selectedOptions?.[0]?.textContent || "Servicebericht";
         const suggested=(company && !company.startsWith("—") ? company.trim() : "Servicebericht")
           .replace(/[\\/:*?"<>|]/g,"_")+"_Historie.json";
-
-        const payload={
-          format:"ServiceBericht-Historie",
-          version:1,
-          savedAt:new Date().toISOString(),
-          history:list
-        };
-        const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+        const blob=new Blob([JSON.stringify({
+          format:"ServiceBericht-Historie", version:1,
+          savedAt:new Date().toISOString(), history:list
+        },null,2)],{type:"application/json"});
 
         if(window.showSaveFilePicker){
           const handle=await window.showSaveFilePicker({
             suggestedName:suggested,
             types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
           });
-          const w=await handle.createWritable();
-          await w.write(blob);
-          await w.close();
-          $("status").textContent="Historie wurde gespeichert.";
+          const w=await handle.createWritable(); await w.write(blob); await w.close();
         }else{
-          const a=document.createElement("a");
-          a.href=URL.createObjectURL(blob);
-          a.download=suggested;
-          document.body.appendChild(a); a.click(); a.remove();
+          const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+          a.download=suggested; document.body.appendChild(a); a.click(); a.remove();
           setTimeout(()=>URL.revokeObjectURL(a.href),3000);
         }
       }catch(e){
@@ -1004,9 +990,6 @@ $("share").onclick=async()=>{
       }
     });
 
-    // EXISTING „Öffnen / Bearbeiten“:
-    // Open a history file from a user-selected local folder and put it back
-    // into the SAME existing localStorage history key.
     open?.addEventListener("click",async()=>{
       try{
         let text=null;
@@ -1027,18 +1010,52 @@ $("share").onclick=async()=>{
         if(!text) return;
 
         const payload=JSON.parse(text);
-        const list=Array.isArray(payload) ? payload : payload.history;
-        if(!Array.isArray(list)) throw new Error("Keine gültige Bericht-Historie gefunden.");
 
-        saveHistory(list);
-        refresh();
-        $("status").textContent="Historie wurde geöffnet.";
+        // Current exported history format.
+        if(payload && Array.isArray(payload.history)){
+          saveHistory(payload.history);
+          refresh();
+          return;
+        }
+
+        // Backward compatibility: a file containing one report.
+        const report=payload?.format==="ServiceBericht" ? payload.data : payload;
+        if(report && typeof report==="object" && !Array.isArray(report)){
+          applyForm(report);
+          refresh();
+          return;
+        }
+
+        // Also accept a raw history array.
+        if(Array.isArray(payload)){
+          saveHistory(payload);
+          refresh();
+          return;
+        }
+
+        throw new Error("Ungültige Bericht-/Historie-Datei.");
       }catch(e){
-        if(e?.name!=="AbortError") alert("Historie konnte nicht geöffnet werden: "+(e?.message||e));
+        if(e?.name!=="AbortError") alert("Bericht konnte nicht geöffnet werden: "+(e?.message||e));
       }
     });
 
-    // EXISTING delete behavior stays unchanged.
+    // Selecting a report in the existing Historie list must load that
+    // report into the form. This was missing: the list was only refreshed,
+    // but no change handler applied the selected item's data.
+    sel?.addEventListener("change",()=>{
+      if(sel.value==="") return;
+      const list=loadHistory();
+      const item=list[Number(sel.value)];
+      if(!item) return;
+
+      const data=item.data || item.formData || item.report || item;
+      if(!data || typeof data!=="object") return;
+
+      applyForm(data);
+      sel.value=String(Number(sel.value));
+      $("status").textContent="Bericht wurde geöffnet.";
+    });
+
     del?.addEventListener("click",()=>{
       if(sel.value==="") return;
       const list=loadHistory();
