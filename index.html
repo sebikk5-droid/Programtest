@@ -116,9 +116,6 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
   <div class="choice-group">
     <label class="check"><input id="maschine_ok" type="checkbox"> Maschine in ordnungsgemäßem Zustand übernommen</label>
   </div>
-  <div class="choice-group">
-    <label class="check"><input id="uebernachtungskosten" type="checkbox"> Übernachtungskosten</label>
-  </div>
 </div>
 <div id="times"></div>
 <div class="grid" style="margin-top:12px">
@@ -164,6 +161,9 @@ function dayTemplate(d){
   <div class="daybox" data-daybox="${d}">
     <h3>Tag ${d}</h3>
     <div class="field"><label>Datum</label><input type="date" data-day="${d}" class="daydate"></div>
+    <div class="choice-group" style="margin:8px 0 10px">
+      <label class="check"><input type="checkbox" data-overnight-day="${d}"> Übern.-kosten – Ja</label>
+    </div>
 
     <div class="sectiontitle">Anfahrt</div>
     <div class="row">
@@ -441,6 +441,21 @@ set(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","));
 set(form,"Reisezeit gesamt",fmtMin(travel));
 set(form,"Arbeitszeit gesamt",fmtMin(work));
 set(form,"Gesamtzeit",fmtMin(travel+work));
+
+// Übern.-kosten: Original-PDF has this as a column in the daily table.
+// The app uses two rows per day; mark the first row belonging to each day.
+// Coordinates are for the supplied Leer.pdf template (A4, points).
+const page=pdf.getPages()[0];
+const overnightX=535;
+for(let d=1;d<=visibleDays;d++){
+  const cb=document.querySelector(`[data-overnight-day="${d}"]`);
+  if(cb && cb.checked){
+    const row=(d-1)*2+1;
+    const centers=[545.7,560.0,574.0,588.0,602.0,616.5,630.5,644.5,658.8,672.9,687.0,701.2];
+    const y=centers[Math.min(row-1,centers.length-1)];
+    page.drawText("X",{x:overnightX,y:y-4,size:9});
+  }
+}
 form.updateFieldAppearances();form.flatten();let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("share").disabled=false;
