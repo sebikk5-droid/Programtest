@@ -154,7 +154,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 <div id="status"></div>
 </main>
-<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button class="go" id="share" disabled>📎 PDF teilen</button></div>
+<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button class="go" id="share" disabled>📎 Udostępnij PDF</button></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js">
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   const k="pdf_"+el.id;
@@ -229,7 +229,7 @@ function dayTemplate(d){
   </div>`;
 }
 $("times").innerHTML=dayTemplate(1)+`
-  <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Weiteren Tag hinzufügen</button>
+  <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Dodaj kolejny dzień</button>
 `;
 document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
 $("addDay").onclick=()=>{
@@ -594,7 +594,7 @@ for(let d=1;d<=visibleDays;d++){
 form.updateFieldAppearances();form.flatten();let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("share").disabled=false;
-$("status").textContent="Gotowe — jeden PDF jest przygotowany. Kliknij „📎 PDF teilen”, aby zapisać lub wysłać go.";
+$("status").textContent="Gotowe — jeden PDF jest przygotowany. Kliknij „📎 Udostępnij PDF”, aby zapisać lub wysłać go.";
 }catch(e){$("status").textContent="Fehler: "+e.message}
 };
 $("share").onclick=async()=>{
@@ -803,55 +803,6 @@ $("share").onclick=async()=>{
     document.addEventListener("DOMContentLoaded",setupCustomerAutocomplete);
   else
     setupCustomerAutocomplete();
-})();
-</script>
-
-<script>
-(function(){
-  "use strict";
-
-  // Make the browser's native share dialog use a German PDF filename.
-  window.SERVICEBERICHT_PDF_FILENAME = "Servicebericht.pdf";
-
-  // Add a German share button when the existing app has a PDF action but no
-  // dedicated share action. It uses the Web Share API where supported.
-  function setupPdfShare(){
-    var buttons=Array.from(document.querySelectorAll("button"));
-    var pdfBtn=buttons.find(function(b){
-      return /PDF erstellen|PDF generieren|PDF herunterladen/i.test(b.textContent||"");
-    });
-    if(!pdfBtn || document.getElementById("sharePdfButton")) return;
-
-    var share=document.createElement("button");
-    share.type="button";
-    share.id="sharePdfButton";
-    share.textContent="PDF teilen";
-    share.style.marginLeft="8px";
-
-    share.addEventListener("click",async function(){
-      try{
-        // If the app exposes a PDF blob/file, use it. Otherwise ask the user
-        // to generate the PDF first; no fake file is created.
-        var blob=window.lastGeneratedPdfBlob || window.pdfBlob || null;
-        if(blob && navigator.share && navigator.canShare){
-          var file=new File([blob],window.SERVICEBERICHT_PDF_FILENAME,{type:"application/pdf"});
-          if(navigator.canShare({files:[file]})){
-            await navigator.share({files:[file],title:"Servicebericht",text:"Servicebericht"});
-            return;
-          }
-        }
-        alert("Bitte zuerst das PDF erstellen. Danach kann es über die Teilen-Funktion des Geräts weitergegeben werden.");
-      }catch(e){
-        if(e && e.name!=="AbortError") alert("Das PDF konnte nicht geteilt werden.");
-      }
-    });
-    pdfBtn.insertAdjacentElement("afterend",share);
-  }
-
-  // Try several times because the V27 app builds its controls dynamically.
-  document.addEventListener("DOMContentLoaded",setupPdfShare);
-  setTimeout(setupPdfShare,500);
-  setTimeout(setupPdfShare,1500);
 })();
 </script>
 </body>
