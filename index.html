@@ -452,12 +452,14 @@ function bindTimeInputs(){
 
     el.addEventListener("input",()=>{
       const key=el.dataset.k||"";
+      const box=el.closest("[data-daybox]");
+      const boxDay=box ? parseInt(box.getAttribute("data-daybox"),10) : 1;
       const m=key.match(/^(RZstart|RZende|AZstart|AZende)(\d+)$/);
       const row=m?parseInt(m[2],10):0;
-      const d=row?Math.ceil(row/2):1;
+      // Reisezeit-Ändern has no data-k, therefore the day comes from its daybox.
+      const d=row?Math.ceil(row/2):(Number.isFinite(boxDay)?boxDay:1);
       const outRow=d*2-1,backRow=d*2;
       const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
-      const box=document.querySelector(`[data-daybox="${d}"]`);
       const r=customerRoute();
 
       // EXACTLY the day-1 "Reisezeit ändern" behavior, scoped to this day.
@@ -530,6 +532,14 @@ function bindTimeInputs(){
       if(key===`AZstart${outRow}`||key===`AZende${outRow}`)el.dataset.manual="1";
       recalcTimes();
     });
+  });
+
+  document.querySelectorAll("#times [data-route-override]").forEach(el=>{
+    if(el.dataset.overrideEvents==="1") return;
+    el.dataset.overrideEvents="1";
+    const recalcOverride=()=>el.dispatchEvent(new Event("input",{bubbles:true}));
+    el.addEventListener("change",recalcOverride);
+    el.addEventListener("blur",recalcOverride);
   });
 }
 
