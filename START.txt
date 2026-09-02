@@ -1,0 +1,15 @@
+SERVICE-BERICHT — iPAD
+
+Ta wersja jest przygotowana pod iPada.
+
+WAŻNE:
+Sam ZIP nie może zostać uruchomiony jako aplikacja bezpośrednio z aplikacji Pliki.
+Najpierw pliki trzeba umieścić pod adresem HTTPS (hosting).
+
+Po opublikowaniu:
+1. Otwórz adres w Safari na iPadzie.
+2. Naciśnij Udostępnij.
+3. Wybierz „Dodaj do ekranu początkowego”.
+4. Uruchamiaj Service Bericht z ikony.
+
+Lista firm i formularz są już w paczce.
