@@ -961,75 +961,32 @@ $("share").onclick=async()=>{
     const del=document.getElementById("historyDelete");
     const sel=document.getElementById("historySelect");
 
-    // EXISTING „＋ Speichern“ button:
-    // save the same collectForm() data that the old history used, but to a
-    // user-selected local file instead of creating a second history system.
-    save?.addEventListener("click",async()=>{
-      try{
-        const company=document.getElementById("company")?.selectedOptions?.[0]?.textContent || "Bericht";
-        const suggested=((company && !company.startsWith("—"))?company:"Bericht")
-          .trim().replace(/[\\/:*?"<>|]/g,"_")+".bericht.json";
-        const payload={
-          format:"ServiceBericht",
-          version:1,
-          savedAt:new Date().toISOString(),
-          data:collectForm()
-        };
-        const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+    save?.addEventListener("click",()=>{
+      const list=loadHistory();
+      const company=document.getElementById("company")?.selectedOptions?.[0]?.textContent || "Bericht";
+      const name=prompt("Name für den Bericht:", company && !company.startsWith("—") ? company : "Bericht");
+      if(name===null) return;
 
-        if(window.showSaveFilePicker){
-          const handle=await window.showSaveFilePicker({
-            suggestedName:suggested,
-            types:[{description:"Servicebericht",accept:{"application/json":[".json"]}}]
-          });
-          const w=await handle.createWritable();
-          await w.write(blob);
-          await w.close();
-        }else{
-          const a=document.createElement("a");
-          a.href=URL.createObjectURL(blob);
-          a.download=suggested;
-          document.body.appendChild(a); a.click();
-          setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
-        }
-      }catch(e){
-        if(e?.name!=="AbortError") alert("Bericht konnte nicht gespeichert werden: "+(e?.message||e));
-      }
+      list.unshift({
+        name:name.trim() || "Bericht",
+        savedAt:new Date().toISOString(),
+        data:collectForm()
+      });
+      saveHistory(list.slice(0,100));
+      refresh();
+      sel.value="0";
     });
 
-    // EXISTING „Öffnen / Bearbeiten“ button:
-    // open a local report file and feed it through the existing applyForm().
-    open?.addEventListener("click",async()=>{
-      try{
-        let text=null;
-        if(window.showOpenFilePicker){
-          const [handle]=await window.showOpenFilePicker({
-            multiple:false,
-            types:[{description:"Servicebericht",accept:{"application/json":[".json"]}}]
-          });
-          text=await (await handle.getFile()).text();
-        }else{
-          const input=document.createElement("input");
-          input.type="file";
-          input.accept=".json,application/json";
-          text=await new Promise(resolve=>{
-            input.onchange=async()=>resolve(input.files[0]?await input.files[0].text():null);
-            input.click();
-          });
-        }
-        if(!text) return;
-
-        const payload=JSON.parse(text);
-        const data=payload?.format==="ServiceBericht" ? payload.data : payload;
-        if(!data || typeof data!=="object") throw new Error("Ungültige Bericht-Datei.");
-        applyForm(data);
-        refresh();
-      }catch(e){
-        if(e?.name!=="AbortError") alert("Bericht konnte nicht geöffnet werden: "+(e?.message||e));
+    open?.addEventListener("click",()=>{
+      if(sel.value===""){
+        alert("Bitte zuerst einen Bericht auswählen.");
+        return;
       }
+      const list=loadHistory();
+      const item=list[Number(sel.value)];
+      if(item) applyForm(item.data);
     });
 
-    // Existing history delete stays untouched.
     del?.addEventListener("click",()=>{
       if(sel.value==="") return;
       const list=loadHistory();
@@ -1128,52 +1085,67 @@ $("share").onclick=async()=>{
 <script>
 (function(){
   function setupSaveAsPdf(){
-  const btn=document.getElementById("savePdf");
-  if(!btn) return;
+    const btn=document.getElementById("savePdf");
+    if(!btn || btn.dataset.saveasBound==="1") return;
+    btn.dataset.saveasBound="1";
 
-  btn.onclick=async()=>{
-    try{
-      const blob=await buildPdfBlob();
-      if(!blob) throw new Error("PDF konnte nicht erstellt werden.");
-
-      const suggested=((document.getElementById("order")?.value||"Service-Bericht").trim()
-        .replace(/[\\/:*?"<>|]/g,"_")||"Service-Bericht")+".pdf";
-
-      // Local folder selection: choose a folder, then save the PDF inside it.
-      // This is intentionally a directory picker, not a new application button.
-      if("showDirectoryPicker" in window){
-        const dir=await window.showDirectoryPicker({mode:"readwrite"});
-        const file=await dir.getFileHandle(suggested,{create:true});
-        const writable=await file.createWritable();
-        await writable.write(blob);
-        await writable.close();
+    // Use the File System Access API where supported (Chrome/Edge on desktop).
+    // On iPad/Safari the native download/share mechanism is used; Safari
+    // decides the destination via its own Files UI.
+    btn.addEventListener("click",async function(){
+      if(!lastPdfBlob){
+        const status=document.getElementById("status");
+        if(status) status.textContent="Bitte zuerst „PDF erstellen“ klicken.";
         return;
       }
 
-      // Fallback for browsers without Directory Picker.
-      if("showSaveFilePicker" in window){
-        const handle=await window.showSaveFilePicker({
-          suggestedName:suggested,
-          types:[{description:"PDF-Datei",accept:{"application/pdf":[".pdf"]}}]
-        });
-        const writable=await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        return;
+      const defaultName="Service-Bericht.pdf";
+
+      try{
+        if(window.showSaveFilePicker){
+          const handle=await window.showSaveFilePicker({
+            suggestedName:defaultName,
+            types:[{
+              description:"PDF-Datei",
+              accept:{"application/pdf":[".pdf"]}
+            }]
+          });
+          const writable=await handle.createWritable();
+          await writable.write(lastPdfBlob);
+          await writable.close();
+          const status=document.getElementById("status");
+          if(status) status.textContent="PDF wurde gespeichert.";
+          return;
+        }
+      }catch(e){
+        if(e && e.name==="AbortError") return;
       }
 
+      // iPad/iPhone Safari: create a download and let the browser's Files
+      // destination picker handle the location. The filename can be changed
+      // by the user in the Files save sheet.
+      const url=URL.createObjectURL(lastPdfBlob);
       const a=document.createElement("a");
-      a.href=URL.createObjectURL(blob);
-      a.download=suggested;
-      document.body.appendChild(a); a.click();
-      setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
-    }catch(e){
-      if(e?.name==="AbortError") return;
-      console.error(e);
-      alert("Speichern nicht möglich: "+(e?.message||e));
+      a.href=url;
+      a.download=defaultName;
+      a.style.display="none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},5000);
+
+      const status=document.getElementById("status");
+      if(status) status.textContent="PDF zum Speichern geöffnet.";
+    });
+
+    const share=document.getElementById("share");
+    if(share){
+      const sync=function(){btn.disabled=share.disabled;};
+      const observer=new MutationObserver(sync);
+      observer.observe(share,{attributes:true,attributeFilter:["disabled"]});
+      sync();
     }
-  };
-}
+  }
 
   if(document.readyState==="loading")
     document.addEventListener("DOMContentLoaded",setupSaveAsPdf);
@@ -1181,9 +1153,5 @@ $("share").onclick=async()=>{
     setupSaveAsPdf();
 })();
 </script>
-
-
-
-
 </body>
 </html>
