@@ -26,6 +26,13 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 @media (min-width: 900px){main{max-width:1000px;padding-left:24px;padding-right:24px}.card{padding:20px}.grid{grid-template-columns:1fr 1fr}.row{grid-template-columns:repeat(6,1fr)}}
 @media (orientation:landscape) and (min-width: 900px){.grid{grid-template-columns:repeat(2,1fr)}}
 .install-note{background:#eef2ff;border-radius:12px;padding:10px 12px;font-size:13px;margin-top:10px;color:#374151}
+
+<style>
+.daybox label{display:block;font-weight:600;font-size:13px;margin:4px 0 3px}
+.daybox input{box-sizing:border-box;width:100%}
+.daybox input::placeholder{opacity:.9}
+.daybox .row{align-items:end}
+</style>
 </style>
 </head>
 <body>
@@ -79,18 +86,18 @@ for(let d=1;d<=6;d++){
     <h3 style="font-size:15px;margin:0 0 6px">Tag ${d}</h3>
     <label>Datum</label><input type="date" data-day="${d}" class="daydate">
     <div class="row">
-      <input type="time" data-k="RZstart${(d*2)-1}">
-      <input type="time" data-k="RZende${(d*2)-1}">
-      <input type="time" data-k="PauseRZ${(d*2)-1}" value="00:00">
-      <input type="time" data-k="AZstart${(d*2)-1}">
-      <input type="time" data-k="AZende${(d*2)-1}">
-      <input type="time" data-k="PauseAZ${(d*2)-1}" value="00:00">
+      <input type="time" data-k="RZstart${(d*2)-1}" aria-label="Anfahrt von" title="Anfahrt von" placeholder="Anfahrt von">
+      <input type="time" data-k="RZende${(d*2)-1}" aria-label="Anfahrt bis" title="Anfahrt bis" placeholder="Anfahrt bis">
+      <input type="time" data-k="PauseRZ${(d*2)-1}" value="00:00" aria-label="Pause Fahrt" title="Pause Fahrt">
+      <input type="time" data-k="AZstart${(d*2)-1}" aria-label="Arbeitszeit von" title="Arbeitszeit von">
+      <input type="time" data-k="AZende${(d*2)-1}" aria-label="Arbeitszeit bis" title="Arbeitszeit bis">
+      <input type="time" data-k="PauseAZ${(d*2)-1}" value="00:00" aria-label="Pause Arbeit" title="Pause Arbeit">
     </div>
     <div class="row">
       <input type="number" inputmode="decimal" step="0.1" placeholder="km Anfahrt" data-k="Kilometer${(d*2)-1}">
-      <input type="time" data-k="RZstart${d*2}">
-      <input type="time" data-k="RZende${d*2}">
-      <input type="time" data-k="PauseRZ${d*2}" value="00:00">
+      <input type="time" data-k="RZstart${d*2}" aria-label="Rückfahrt von" title="Rückfahrt von">
+      <input type="time" data-k="RZende${d*2}" aria-label="Rückfahrt bis" title="Rückfahrt bis">
+      <input type="time" data-k="PauseRZ${d*2}" value="00:00" aria-label="Pause Rückfahrt" title="Pause Rückfahrt">
       <input type="number" inputmode="decimal" step="0.1" placeholder="km Rückfahrt" data-k="Kilometer${d*2}">
       <input disabled placeholder="Netto RZ / AZ">
     </div>
@@ -138,6 +145,47 @@ function fillRouteForDay(d,c){
   }
   recalcTimes();
 }
+
+function getRouteData(c){
+  const s=String(c?.notatki||"").replace(",",".");
+  const kmMatch=s.match(/(\d+(?:\.\d+)?)\s*km/i);
+  const hMatch=s.match(/(\d+(?:\.\d+)?)\s*h/i);
+  return {
+    km: kmMatch ? parseFloat(kmMatch[1]) : 0,
+    minutes: hMatch ? Math.round(parseFloat(hMatch[1])*60) : 0
+  };
+}
+function addMinutes(t,mins){
+  if(!t || !mins) return "";
+  const p=t.split(":").map(Number);
+  if(p.length<2 || p.some(Number.isNaN)) return "";
+  let m=p[0]*60+p[1]+mins;
+  m=((m%1440)+1440)%1440;
+  return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+}
+function setDay1RouteFromCustomer(){
+  const c=companies && companies[+$("company").value];
+  if(!c) return;
+  const r=getRouteData(c);
+  const outStart=document.querySelector('[data-k="RZstart1"]');
+  const outEnd=document.querySelector('[data-k="RZende1"]');
+  const returnStart=document.querySelector('[data-k="RZstart2"]');
+  const returnEnd=document.querySelector('[data-k="RZende2"]');
+  const kmOut=document.querySelector('[data-k="Kilometer1"]');
+  const kmReturn=document.querySelector('[data-k="Kilometer2"]');
+
+  if(r.km){
+    if(kmOut) kmOut.value=r.km;
+    if(kmReturn) kmReturn.value=r.km;
+  }
+  if(r.minutes){
+    if(outStart && outEnd && outStart.value)
+      outEnd.value=addMinutes(outStart.value,r.minutes);
+    if(returnStart && returnEnd && returnStart.value)
+      returnEnd.value=addMinutes(returnStart.value,r.minutes);
+  }
+  recalcTimes();
+}
 fetch("companies.json").then(r=>r.json()).then(x=>{
   companies=x;
   $("company").innerHTML='<option value="">— wybierz firmę —</option>'+x.map((c,i)=>`<option value="${i}">${c.firma}</option>`).join("");
@@ -146,7 +194,7 @@ fetch("companies.json").then(r=>r.json()).then(x=>{
     if(!c)return;
     let a=address(c.adres);
     $("street").value=a[0];$("city").value=a[1];
-    for(let d=1;d<=6;d++) fillRouteForDay(d,c);
+    setDay1RouteFromCustomer();
   };
 });
 
@@ -184,17 +232,25 @@ function recalcTimes(){
   $("allTotal").value=fmtMin(travel+work);
 }
 document.querySelectorAll("#times input").forEach(el=>el.addEventListener("input",()=>{
-  const m=el.dataset.k||"";
-  const hit=m.match(/^RZstart(\d+)$/);
-  if(hit){
-    const idx=+hit[1], d=Math.ceil(idx/2), c=companies[+$("company").value];
-    if(c){
-      const r=parseRoute(c);
-      const end=document.querySelector(`[data-k="RZende${idx}"]`);
-      if(end && r.minutes) end.value=addMinutesToTime(el.value,r.minutes);
-      fillRouteForDay(d,c);
+  const key=el.dataset.k||"";
+  const c=companies && companies[+$("company").value];
+  if(c){
+    const r=getRouteData(c);
+    const pairs={
+      RZstart1:"RZende1", RZende1:"RZstart1",
+      RZstart2:"RZende2", RZende2:"RZstart2"
+    };
+    const other=pairs[key];
+    if(other && r.minutes && el.value){
+      const target=document.querySelector(`[data-k="${other}"]`);
+      if(target){
+        target.value=key.startsWith("RZstart") ? addMinutes(el.value,r.minutes) : addMinutes(el.value,-r.minutes);
+      }
     }
-  } else recalcTimes();
+  }
+  recalcTimes();
+}));
+recalcTimes();
 }));
 recalcTimes();
 
