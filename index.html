@@ -294,44 +294,6 @@ document.getElementById("times").addEventListener("change",function(e){
   const el=e.target;
   if(!el.matches("select.quarter-time")) return;
 
-  // Emptying a time field means: cancel the manual override and return
-  // control to the automatic customer-route calculation.
-  if(el.value===""){
-    el.dataset.manual="0";
-    el.removeAttribute("data-manual");
-
-    const key=el.dataset.k||"";
-    const m=key.match(/^(RZstart|RZende|AZstart|AZende)(\d+)$/);
-    if(m){
-      const row=parseInt(m[2],10);
-      const d=Math.ceil(row/2);
-      const outRow=d*2-1, backRow=d*2;
-      const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
-      const r=customerRoute();
-
-      if(r.minutes){
-        const a1=field("RZstart",outRow), a2=field("RZende",outRow);
-        const b1=field("RZstart",backRow), b2=field("RZende",backRow);
-        const pause=field("PauseRZ",backRow);
-        const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
-        const duration=r.minutes+pauseMin;
-
-        if(row===outRow && a1 && a2){
-          if(el===a1 && a2) a2.value=a1.value ? addMinutesToTime(a1.value,r.minutes) : "";
-          if(el===a2 && a1) a1.value=a2.value ? addMinutesToTime(a2.value,-r.minutes) : "";
-        }
-        if(row===backRow && b1 && b2){
-          if(el===b1 && b2) b2.value=b1.value ? addMinutesToTime(b1.value,duration) : "";
-          if(el===b2 && b1) b1.value=b2.value ? addMinutesToTime(b2.value,-duration) : "";
-        }
-      }
-    }
-    // Do not let the generic manual-time handler reclassify this cleared field.
-    // Rebind after the reset so the next non-empty change works normally.
-    recalcTimes();
-    return;
-  }
-
   const key=el.dataset.k||"";
   const m=key.match(/^(RZstart|RZende|AZstart|AZende)(\d+)$/);
   if(!m) return;
@@ -345,36 +307,47 @@ document.getElementById("times").addEventListener("change",function(e){
 
   const a1=field("RZstart",outRow), a2=field("RZende",outRow);
   const b1=field("RZstart",backRow), b2=field("RZende",backRow);
+  const pause=field("PauseRZ",backRow);
+  const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
 
-  if(row===outRow && (m[1]==="RZstart" || m[1]==="RZende")){
+  // If a travel time is cleared, DO NOT leave the pair empty.
+  // Rebuild the cleared value from the other side using the customer's
+  // travel duration. This also cancels any manual override.
+  if(el.value===""){
+    el.dataset.manual="0";
+    el.removeAttribute("data-manual");
+
+    if(row===outRow && a1 && a2){
+      if(el===a2 && a1.value) a2.value=addMinutesToTime(a1.value,r.minutes);
+      else if(el===a1 && a2.value) a1.value=addMinutesToTime(a2.value,-r.minutes);
+    }
+
+    if(row===backRow && b1 && b2){
+      const duration=r.minutes+pauseMin;
+      if(el===b2 && b1.value) b2.value=addMinutesToTime(b1.value,duration);
+      else if(el===b1 && b2.value) b1.value=addMinutesToTime(b2.value,-duration);
+    }
+
+    recalcTimes();
+    return;
+  }
+
+  // Normal automatic travel-time calculation.
+  if(row===outRow){
     if(el===a1 && a1.value) a2.value=addMinutesToTime(a1.value,r.minutes);
-    if(el===a2 && a2.value) a1.value=addMinutesToTime(a2.value,-r.minutes);
+    else if(el===a2 && a2.value) a1.value=addMinutesToTime(a2.value,-r.minutes);
 
     const az=field("AZstart",outRow);
     if(az && a2.value && az.dataset.manual!=="1") az.value=a2.value;
   }
 
-  if(row===backRow && (m[1]==="RZstart" || m[1]==="RZende")){
-    const pause=field("PauseRZ",backRow);
-    const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
+  if(row===backRow){
     const duration=r.minutes+pauseMin;
-
     if(el===b1 && b1.value) b2.value=addMinutesToTime(b1.value,duration);
-    if(el===b2 && b2.value) b1.value=addMinutesToTime(b2.value,-duration);
+    else if(el===b2 && b2.value) b1.value=addMinutesToTime(b2.value,-duration);
 
     const azEnd=field("AZende",outRow);
     if(azEnd && b1.value && azEnd.dataset.manual!=="1") azEnd.value=b1.value;
-  }
-
-  if(m[1]==="AZende" && row===outRow && el.value){
-    const bStart=field("RZstart",backRow);
-    if(bStart && bStart.dataset.manual!=="1"){
-      bStart.value=el.value;
-      const bEnd=field("RZende",backRow);
-      const pause=field("PauseRZ",backRow);
-      const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
-      if(bEnd) bEnd.value=addMinutesToTime(bStart.value,r.minutes+pauseMin);
-    }
   }
 
   recalcTimes();
