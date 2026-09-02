@@ -961,32 +961,75 @@ $("share").onclick=async()=>{
     const del=document.getElementById("historyDelete");
     const sel=document.getElementById("historySelect");
 
-    save?.addEventListener("click",()=>{
-      const list=loadHistory();
-      const company=document.getElementById("company")?.selectedOptions?.[0]?.textContent || "Bericht";
-      const name=prompt("Name für den Bericht:", company && !company.startsWith("—") ? company : "Bericht");
-      if(name===null) return;
+    // EXISTING „＋ Speichern“ button:
+    // save the same collectForm() data that the old history used, but to a
+    // user-selected local file instead of creating a second history system.
+    save?.addEventListener("click",async()=>{
+      try{
+        const company=document.getElementById("company")?.selectedOptions?.[0]?.textContent || "Bericht";
+        const suggested=((company && !company.startsWith("—"))?company:"Bericht")
+          .trim().replace(/[\\/:*?"<>|]/g,"_")+".bericht.json";
+        const payload={
+          format:"ServiceBericht",
+          version:1,
+          savedAt:new Date().toISOString(),
+          data:collectForm()
+        };
+        const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
 
-      list.unshift({
-        name:name.trim() || "Bericht",
-        savedAt:new Date().toISOString(),
-        data:collectForm()
-      });
-      saveHistory(list.slice(0,100));
-      refresh();
-      sel.value="0";
-    });
-
-    open?.addEventListener("click",()=>{
-      if(sel.value===""){
-        alert("Bitte zuerst einen Bericht auswählen.");
-        return;
+        if(window.showSaveFilePicker){
+          const handle=await window.showSaveFilePicker({
+            suggestedName:suggested,
+            types:[{description:"Servicebericht",accept:{"application/json":[".json"]}}]
+          });
+          const w=await handle.createWritable();
+          await w.write(blob);
+          await w.close();
+        }else{
+          const a=document.createElement("a");
+          a.href=URL.createObjectURL(blob);
+          a.download=suggested;
+          document.body.appendChild(a); a.click();
+          setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+        }
+      }catch(e){
+        if(e?.name!=="AbortError") alert("Bericht konnte nicht gespeichert werden: "+(e?.message||e));
       }
-      const list=loadHistory();
-      const item=list[Number(sel.value)];
-      if(item) applyForm(item.data);
     });
 
+    // EXISTING „Öffnen / Bearbeiten“ button:
+    // open a local report file and feed it through the existing applyForm().
+    open?.addEventListener("click",async()=>{
+      try{
+        let text=null;
+        if(window.showOpenFilePicker){
+          const [handle]=await window.showOpenFilePicker({
+            multiple:false,
+            types:[{description:"Servicebericht",accept:{"application/json":[".json"]}}]
+          });
+          text=await (await handle.getFile()).text();
+        }else{
+          const input=document.createElement("input");
+          input.type="file";
+          input.accept=".json,application/json";
+          text=await new Promise(resolve=>{
+            input.onchange=async()=>resolve(input.files[0]?await input.files[0].text():null);
+            input.click();
+          });
+        }
+        if(!text) return;
+
+        const payload=JSON.parse(text);
+        const data=payload?.format==="ServiceBericht" ? payload.data : payload;
+        if(!data || typeof data!=="object") throw new Error("Ungültige Bericht-Datei.");
+        applyForm(data);
+        refresh();
+      }catch(e){
+        if(e?.name!=="AbortError") alert("Bericht konnte nicht geöffnet werden: "+(e?.message||e));
+      }
+    });
+
+    // Existing history delete stays untouched.
     del?.addEventListener("click",()=>{
       if(sel.value==="") return;
       const list=loadHistory();
@@ -1142,76 +1185,5 @@ $("share").onclick=async()=>{
 
 
 
-
-<script>
-(function(){
-  function historyPayload(){
-    if(typeof collectForm==="function") return collectForm();
-    if(typeof collectState==="function") return collectState();
-    const out={};
-    document.querySelectorAll("input,select,textarea").forEach((el,i)=>{
-      out[el.dataset.k||el.name||el.id||("f"+i)]=
-        el.type==="checkbox"||el.type==="radio" ? el.checked : el.value;
-    });
-    return out;
-  }
-
-  function restorePayload(data){
-    if(typeof applyForm==="function"){ applyForm(data); return; }
-    if(typeof applyState==="function"){ applyState(data); return; }
-    const by={};
-    document.querySelectorAll("input,select,textarea").forEach((el,i)=>{
-      by[el.dataset.k||el.name||el.id||("f"+i)]=el;
-    });
-    Object.entries(data||{}).forEach(([k,v])=>{
-      const el=by[k]; if(!el) return;
-      if(el.type==="checkbox"||el.type==="radio") el.checked=!!v;
-      else el.value=v??"";
-    });
-    if(typeof recalcTimes==="function") recalcTimes();
-  }
-
-  async function saveHistoryFile(){
-    const blob=new Blob([JSON.stringify(historyPayload(),null,2)],{type:"application/json"});
-    const handle=await window.showSaveFilePicker({
-      suggestedName:"Servicebericht.json",
-      types:[{description:"Servicebericht",accept:{"application/json":[".json"]}}]
-    });
-    const w=await handle.createWritable();
-    await w.write(blob); await w.close();
-  }
-
-  async function loadHistoryFile(){
-    const [handle]=await window.showOpenFilePicker({
-      multiple:false,
-      types:[{description:"Servicebericht",accept:{"application/json":[".json"]}}]
-    });
-    const data=JSON.parse(await (await handle.getFile()).text());
-    restorePayload(data);
-  }
-
-  function hookExistingButtons(){
-    const btns=[...document.querySelectorAll("button")];
-    const save=btns.find(b=>{
-      const t=(b.textContent||"").trim();
-      return /histor|bericht/i.test(t) && /speicher|save/i.test(t) && !/PDF/i.test(t);
-    });
-    const load=btns.find(b=>{
-      const t=(b.textContent||"").trim();
-      return /histor|bericht/i.test(t) && /laden|öffnen|load|import/i.test(t) && !/PDF/i.test(t);
-    });
-
-    if(save){
-      save.onclick=()=>saveHistoryFile().catch(e=>{if(e?.name!=="AbortError")alert(e.message||e)});
-    }
-    if(load){
-      load.onclick=()=>loadHistoryFile().catch(e=>{if(e?.name!=="AbortError")alert(e.message||e)});
-    }
-  }
-
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",hookExistingButtons);
-  else hookExistingButtons();
-})();
-</script>
 </body>
 </html>
