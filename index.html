@@ -171,7 +171,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 <div id="status"></div>
 </main>
-<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button class="go" id="share" disabled>📎 PDF teilen</button><button class="go" id="savePdf" disabled>💾 PDF speichern</button></div>
+<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button><button class="go" id="share" disabled>📎 PDF teilen</button></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js">
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   const k="pdf_"+el.id;
@@ -1151,6 +1151,30 @@ $("share").onclick=async()=>{
     document.addEventListener("DOMContentLoaded",setupSaveAsPdf);
   else
     setupSaveAsPdf();
+})();
+</script>
+
+<script>
+(function(){
+  function mergePdfCreateAndSave(){
+    const btn=[...document.querySelectorAll("button")].find(b=>/PDF erstellen & speichern/i.test(b.textContent||""));
+    if(!btn || btn.dataset.mergedPdf) return;
+    btn.dataset.mergedPdf="1";
+    const old=btn.onclick;
+    btn.onclick=async function(ev){
+      if(old) await old.call(this,ev);
+      setTimeout(()=>{
+        if(typeof lastPdfBlob!=="undefined" && lastPdfBlob && typeof savePdf==="function"){
+          savePdf();
+        }else if(typeof setupSaveAsPdf==="function"){
+          const saveBtn=document.getElementById("savePdf");
+          if(saveBtn && saveBtn!==btn) saveBtn.click();
+        }
+      },100);
+    };
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",mergePdfCreateAndSave);
+  else mergePdfCreateAndSave();
 })();
 </script>
 </body>
