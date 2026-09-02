@@ -173,6 +173,7 @@ function dayTemplate(d){
     <div class="row">
       <div class="field"><label>Pause während Fahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${(d*2)-1}" value="0" placeholder="Minuten"></div>
       <div class="field"><label>Reisezeit netto</label><input type="text" data-calc="rt${d}" readonly></div>
+      <div class="field"><label>Reisezeit ändern (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-route-override="out" placeholder="z. B. 90"></div>
     </div>
     <div class="row">
       <div class="field"><label>KM Anfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${(d*2)-1}" placeholder="KM Anfahrt"></div>
@@ -196,6 +197,7 @@ function dayTemplate(d){
     <div class="row">
       <div class="field"><label>Pause während Rückfahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${d*2}" value="${d===1?"45":"0"}" placeholder="Minuten"></div>
       <div class="field"><label>Reisezeit netto</label><input type="text" data-calc="rr${d}" readonly></div>
+      <div class="field"><label>Reisezeit ändern (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-route-override="back" placeholder="z. B. 90"></div>
     </div>
     <div class="row">
       <div class="field"><label>KM Rückfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${d*2}" placeholder="KM Rückfahrt"></div>
@@ -273,15 +275,20 @@ function applyCustomerRouteDay1(){
   const pauseR=document.querySelector('[data-k="PauseRZ2"]');
 
   if(r.minutes){
-    // Anfahrt: dokładnie czas z listy klienta.
+    const outOverride=document.querySelector('[data-route-override="out"]');
+    const backOverride=document.querySelector('[data-route-override="back"]');
+    const outTime=outOverride && outOverride.value!=="" ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
+    const backTime=backOverride && backOverride.value!=="" ? Math.max(0,parseInt(backOverride.value,10)||0) : r.minutes;
+
+    // Anfahrt: Listenzeit oder manuell geänderte Zeit.
     if(a1 && a2){
-      if(a2.value) a1.value=addMinutesToTime(a2.value,-r.minutes);
-      else if(a1.value) a2.value=addMinutesToTime(a1.value,r.minutes);
+      if(a2.value) a1.value=addMinutesToTime(a2.value,-outTime);
+      else if(a1.value) a2.value=addMinutesToTime(a1.value,outTime);
     }
 
-    // Rückfahrt: czas z listy + 45 min przerwy.
+    // Rückfahrt: Listenzeit/manuelle Zeit + 45 min Pause.
     if(pauseR) pauseR.value="45";
-    const rueckfahrtGesamt=r.minutes+45;
+    const rueckfahrtGesamt=backTime+45;
     if(b1 && b2){
       if(b2.value) b1.value=addMinutesToTime(b2.value,-rueckfahrtGesamt);
       else if(b1.value) b2.value=addMinutesToTime(b1.value,rueckfahrtGesamt);
@@ -344,21 +351,40 @@ function recalcTimes(){
   for(let d=1;d<=visibleDays;d++){
     const a=d*2-1,b=d*2;
     const q=k=>document.querySelector(`[data-k="${k}"]`)||{value:""};
+
+    const overrideOut = d===1 ? document.querySelector('[data-route-override="out"]') : null;
+    const overrideBack = d===1 ? document.querySelector('[data-route-override="back"]') : null;
+    const routeBase = customerRoute();
+    const outMinutes = (overrideOut && overrideOut.value!=="")
+      ? Math.max(0,parseInt(overrideOut.value,10)||0)
+      : routeBase.minutes;
+    const backMinutes = (overrideBack && overrideBack.value!=="")
+      ? Math.max(0,parseInt(overrideBack.value,10)||0)
+      : routeBase.minutes;
+
     const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value));
     const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
     const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value));
     travel+=rt+rr; work+=wt;
+
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
+
     const sc=(name,val)=>{const el=document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
     sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
+
+    // Keep the effective duration available to the auto-time handler.
+    const box=document.querySelector(`[data-daybox="${d}"]`);
+    if(box){
+      box.dataset.routeOutMinutes=String(outMinutes);
+      box.dataset.routeBackMinutes=String(backMinutes);
+    }
   }
   if($("travelTotal"))$("travelTotal").value=fmtMin(travel);
   if($("workTotal"))$("workTotal").value=fmtMin(work);
   if($("kmTotal"))$("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
   if($("allTotal"))$("allTotal").value=fmtMin(travel+work);
 }
-
 // Auswahlfelder: innerhalb jeder Gruppe nur eine Option gleichzeitig.
 document.querySelectorAll('#choices input[type="checkbox"][name]').forEach(cb=>{
   cb.addEventListener('change',()=>{
@@ -382,6 +408,29 @@ function bindTimeInputs(){
 
     el.addEventListener("input",()=>{
       const key=el.dataset.k||"";
+
+      // Manuelle Änderung der Reisezeit (Minuten) überschreibt die Kundenlistenzeit.
+      if(el.dataset.routeOverride==="out" || el.dataset.routeOverride==="back"){
+        const r=customerRoute();
+        const val=Math.max(0,parseInt(el.value,10)||0);
+        if(r.minutes && val>=0){
+          if(el.dataset.routeOverride==="out"){
+            const a1=document.querySelector('[data-k="RZstart1"]');
+            const a2=document.querySelector('[data-k="RZende1"]');
+            if(a2 && a2.value) a1.value=addMinutesToTime(a2.value,-val);
+            else if(a1 && a1.value) a2.value=addMinutesToTime(a1.value,val);
+          }else{
+            const b1=document.querySelector('[data-k="RZstart2"]');
+            const b2=document.querySelector('[data-k="RZende2"]');
+            const pause=document.querySelector('[data-k="PauseRZ2"]');
+            if(pause) pause.value="45";
+            if(b1 && b1.value) b2.value=addMinutesToTime(b1.value,val+45);
+            else if(b2 && b2.value) b1.value=addMinutesToTime(b2.value,-(val+45));
+          }
+        }
+        recalcTimes();
+        return;
+      }
 
       // Zeiten aus der Kundenliste: Anfahrt = Listenzeit,
       // Rückfahrt = Listenzeit + 45 Minuten.
