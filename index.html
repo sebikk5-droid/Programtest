@@ -87,20 +87,64 @@ for(let d=1;d<=6;d++){
       <input placeholder="Pause Arbeit" data-k="PauseAZ${(d*2)-1}">
     </div>
     <div class="row">
+      <input inputmode="decimal" placeholder="km Anfahrt" data-k="Kilometer${(d*2)-1}" readonly>
       <input placeholder="Rückfahrt von" data-k="RZstart${d*2}">
       <input placeholder="Rückfahrt bis" data-k="RZende${d*2}">
       <input placeholder="Pause Fahrt" data-k="PauseRZ${d*2}">
-      <input inputmode="decimal" placeholder="km Anfahrt / Rückfahrt" data-k="Kilometer${d*2}">
-      <input disabled placeholder="Arbeitszeit netto">
-      <input disabled placeholder="Reisezeit netto">
+      <input inputmode="decimal" placeholder="km Rückfahrt" data-k="Kilometer${d*2}" readonly>
+      <input disabled placeholder="Netto RZ / AZ">
     </div>
-    <div class="muted">Pause Fahrt wird automatisch von RZ abgezogen. Pause Arbeit wird automatisch von AZ abgezogen. Pause: z.B. 00:30 oder 30 Minuten.</div>
+    <div class="muted" id="routeInfo${d}">Po wybraniu klienta aplikacja dobierze km i czas jazdy z listy klientów.</div>
   </div>`);
 }
 
+function parseRoute(c){
+  const s=String(c?.notatki||"").replace(",",".");
+  const km=(s.match(/(\d+(?:\.\d+)?)\s*km/i)||[])[1];
+  const h=(s.match(/(\d+(?:\.\d+)?)\s*h/i)||[])[1];
+  return {km:km?parseFloat(km):0, minutes:h?Math.round(parseFloat(h)*60):0};
+}
+function addMinutesToTime(t,mins){
+  if(!t||!mins)return "";
+  const p=t.trim().split(":").map(Number);
+  if(p.length<2||p.some(Number.isNaN))return "";
+  let m=p[0]*60+p[1]+mins;
+  m=((m%1440)+1440)%1440;
+  return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+}
+function fillRouteForDay(d,c){
+  const r=parseRoute(c);
+  const a=(d*2)-1,b=d*2;
+  const q=k=>document.querySelector(`[data-k="${k}"]`) || {value:""};
+  if(r.km){
+    q(`Kilometer${a}`).value=String(r.km).replace(".",",");
+    q(`Kilometer${b}`).value=String(r.km).replace(".",",");
+  }
+  const s1=q(`RZstart${a}`).value, s2=q(`RZstart${b}`).value;
+  if(r.minutes){
+    if(s1) q(`RZende${a}`).value=addMinutesToTime(s1,r.minutes);
+    if(s2) q(`RZende${b}`).value=addMinutesToTime(s2,r.minutes);
+  }
+  const info=$(`routeInfo${d}`);
+  if(info){
+    info.textContent=r.km&&r.minutes
+      ? `Aus Kundenliste: ${r.km} km und ${fmtMin(r.minutes)} Fahrzeit je Strecke. RZ-Ende wird automatisch aus RZ-Start berechnet.`
+      : (r.km ? `Aus Kundenliste: ${r.km} km je Strecke. Fahrzeit ist nicht hinterlegt.` :
+         (r.minutes ? `Aus Kundenliste: ${fmtMin(r.minutes)} Fahrzeit je Strecke. Kilometer sind nicht hinterlegt.` :
+         "Für diesen Kunden sind keine Fahrdaten in der Kundenliste hinterlegt."));
+  }
+  recalcTimes();
+}
 fetch("companies.json").then(r=>r.json()).then(x=>{
-companies=x; $("company").innerHTML='<option value="">— wybierz firmę —</option>'+x.map((c,i)=>`<option value="${i}">${c.firma}</option>`).join("");
-$("company").onchange=()=>{let c=companies[+$("company").value];if(!c)return;let a=address(c.adres);$("street").value=a[0];$("city").value=a[1]};
+  companies=x;
+  $("company").innerHTML='<option value="">— wybierz firmę —</option>'+x.map((c,i)=>`<option value="${i}">${c.firma}</option>`).join("");
+  $("company").onchange=()=>{
+    let c=companies[+$("company").value];
+    if(!c)return;
+    let a=address(c.adres);
+    $("street").value=a[0];$("city").value=a[1];
+    for(let d=1;d<=6;d++) fillRouteForDay(d,c);
+  };
 });
 
 function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
@@ -136,7 +180,19 @@ function recalcTimes(){
   $("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
   $("allTotal").value=fmtMin(travel+work);
 }
-document.querySelectorAll("#times input").forEach(el=>el.addEventListener("input",recalcTimes));
+document.querySelectorAll("#times input").forEach(el=>el.addEventListener("input",()=>{
+  const m=el.dataset.k||"";
+  const hit=m.match(/^RZstart(\d+)$/);
+  if(hit){
+    const idx=+hit[1], d=Math.ceil(idx/2), c=companies[+$("company").value];
+    if(c){
+      const r=parseRoute(c);
+      const end=document.querySelector(`[data-k="RZende${idx}"]`);
+      if(end && r.minutes) end.value=addMinutesToTime(el.value,r.minutes);
+      fillRouteForDay(d,c);
+    }
+  } else recalcTimes();
+}));
 recalcTimes();
 
 $("generate").onclick=async()=>{
@@ -181,6 +237,29 @@ $("share").disabled=false;
 $("status").textContent="Gotowe — jeden PDF jest przygotowany. Kliknij „📎 Udostępnij PDF”, aby zapisać lub wysłać go.";
 }catch(e){$("status").textContent="Błąd: "+e.message}
 };
+$("share").onclick=async()=>{
+  if(!lastPdfBlob){$("status").textContent="Najpierw kliknij „Generuj PDF”.";return;}
+  const filename="Service-Bericht.pdf";
+  try{
+    const file=new File([lastPdfBlob],filename,{type:"application/pdf"});
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share({files:[file],title:"Service-Bericht"});
+      $("status").textContent="PDF został udostępniony.";
+    }else{
+      const url=URL.createObjectURL(lastPdfBlob),a=document.createElement("a");
+      a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),2000);
+      $("status").textContent="PDF zapisany w Plikach.";
+    }
+  }catch(e){
+    if(e && e.name==="AbortError"){ $("status").textContent="Udostępnianie anulowane."; return; }
+    const url=URL.createObjectURL(lastPdfBlob),a=document.createElement("a");
+    a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+    $("status").textContent="PDF zapisany w Plikach.";
+  }
+};
+
 </script>
 </body>
 </html>
