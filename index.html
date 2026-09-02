@@ -189,6 +189,21 @@ const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signd
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
 let visibleDays=1;
 // Time pickers use 15-minute steps (00/15/30/45).
+function quarterTimeSelect(){
+  let o='<option value="">--:--</option>';
+  for(let h=0;h<24;h++){
+    for(const m of [0,15,30,45]){
+      const hh=String(h).padStart(2,"0"), mm=String(m).padStart(2,"0");
+      o+=`<option value="${hh}:${mm}">${hh}:${mm}</option>`;
+    }
+  }
+  return o;
+}
+function initQuarterTimeSelects(root=document){
+  root.querySelectorAll("select.quarter-time").forEach(s=>{
+    if(!s.options.length) s.innerHTML=quarterTimeSelect();
+  });
+}
 function dayTemplate(d){
   return `
   <div class="daybox" data-daybox="${d}">
@@ -207,8 +222,8 @@ function dayTemplate(d){
 
     <div class="sectiontitle">Anfahrt</div>
     <div class="row">
-      <div class="field"><label>Anfahrt von – Abfahrt</label><input type="time" step="900" data-k="RZstart${(d*2)-1}" aria-label="Anfahrt von"></div>
-      <div class="field"><label>Anfahrt bis – Ankunft</label><input type="time" step="900" data-k="RZende${(d*2)-1}" aria-label="Anfahrt bis"></div>
+      <div class="field"><label>Anfahrt von – Abfahrt</label><select class="quarter-time" data-k="RZstart${(d*2)-1}" aria-label="Anfahrt von"></select></div>
+      <div class="field"><label>Anfahrt bis – Ankunft</label><select class="quarter-time" data-k="RZende${(d*2)-1}" aria-label="Anfahrt bis"></select></div>
     </div>
     <div class="row">
       <div class="field"><label>Pause während Fahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${(d*2)-1}" value="0" placeholder="Minuten"></div>
@@ -221,8 +236,8 @@ function dayTemplate(d){
 
     <div class="sectiontitle">Arbeitszeit</div>
     <div class="row">
-      <div class="field"><label>Arbeitszeit von – Arbeitsbeginn</label><input type="time" step="900" data-k="AZstart${(d*2)-1}"></div>
-      <div class="field"><label>Arbeitszeit bis – Arbeitsende</label><input type="time" step="900" data-k="AZende${(d*2)-1}"></div>
+      <div class="field"><label>Arbeitszeit von – Arbeitsbeginn</label><select class="quarter-time" data-k="AZstart${(d*2)-1}"></select></div>
+      <div class="field"><label>Arbeitszeit bis – Arbeitsende</label><select class="quarter-time" data-k="AZende${(d*2)-1}"></select></div>
     </div>
     <div class="row">
       <div class="field"><label>Pause Arbeit (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseAZ${(d*2)-1}" value="0" placeholder="Minuten"></div>
@@ -231,8 +246,8 @@ function dayTemplate(d){
 
     <div class="sectiontitle">Rückfahrt</div>
     <div class="row">
-      <div class="field"><label>Rückfahrt von – Abfahrt</label><input type="time" step="900" data-k="RZstart${d*2}"></div>
-      <div class="field"><label>Rückfahrt bis – Ankunft zuhause</label><input type="time" step="900" data-k="RZende${d*2}"></div>
+      <div class="field"><label>Rückfahrt von – Abfahrt</label><select class="quarter-time" data-k="RZstart${d*2}"></select></div>
+      <div class="field"><label>Rückfahrt bis – Ankunft zuhause</label><select class="quarter-time" data-k="RZende${d*2}"></select></div>
     </div>
     <div class="row">
       <div class="field"><label>Pause während Rückfahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${d*2}" value="0" placeholder="Minuten"></div>
@@ -251,6 +266,7 @@ $("times").innerHTML=dayTemplate(1)+`
   <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Weiteren Tag hinzufügen</button>
 `;
 document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
+initQuarterTimeSelects($("times"));
 $("addDay").onclick=()=>{
   if(visibleDays>=6)return;
   const d=visibleDays+1;
@@ -273,7 +289,8 @@ $("addDay").onclick=()=>{
 
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
-};
+
+  initQuarterTimeSelects($("times"));};
 
 
 // Day controls: collapse or remove a day that was added by mistake.
