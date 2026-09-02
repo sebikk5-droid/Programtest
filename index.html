@@ -154,7 +154,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 <div id="status"></div>
 </main>
-<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button class="go" id="share" disabled>📎 Udostępnij PDF</button></div>
+<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button class="go" id="share" disabled>📎 PDF teilen</button></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js">
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   const k="pdf_"+el.id;
@@ -229,7 +229,7 @@ function dayTemplate(d){
   </div>`;
 }
 $("times").innerHTML=dayTemplate(1)+`
-  <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Dodaj kolejny dzień</button>
+  <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Weiteren Tag hinzufügen</button>
 `;
 document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
 $("addDay").onclick=()=>{
@@ -594,7 +594,7 @@ for(let d=1;d<=visibleDays;d++){
 form.updateFieldAppearances();form.flatten();let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("share").disabled=false;
-$("status").textContent="Gotowe — jeden PDF jest przygotowany. Kliknij „📎 Udostępnij PDF”, aby zapisać lub wysłać go.";
+$("status").textContent="Gotowe — jeden PDF jest przygotowany. Kliknij „📎 PDF teilen”, aby zapisać lub wysłać go.";
 }catch(e){$("status").textContent="Fehler: "+e.message}
 };
 $("share").onclick=async()=>{
