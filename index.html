@@ -171,7 +171,7 @@ function dayTemplate(d){
       <div class="field"><label>Anfahrt bis – Ankunft</label><input type="time" data-k="RZende${(d*2)-1}" aria-label="Anfahrt bis"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Pause während Fahrt</label><input type="time" data-k="PauseRZ${(d*2)-1}" value="00:00"></div>
+      <div class="field"><label>Pause während Fahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${(d*2)-1}" value="0" placeholder="Minuten"></div>
       <div class="field"><label>Reisezeit netto</label><input type="text" data-calc="rt${d}" readonly></div>
     </div>
     <div class="row">
@@ -184,7 +184,7 @@ function dayTemplate(d){
       <div class="field"><label>Arbeitszeit bis – Arbeitsende</label><input type="time" data-k="AZende${(d*2)-1}"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Pause Arbeit</label><input type="time" data-k="PauseAZ${(d*2)-1}" value="00:00"></div>
+      <div class="field"><label>Pause Arbeit (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseAZ${(d*2)-1}" value="0" placeholder="Minuten"></div>
       <div class="field"><label>Arbeitszeit netto</label><input type="text" data-calc="wt${d}" readonly></div>
     </div>
 
@@ -194,7 +194,7 @@ function dayTemplate(d){
       <div class="field"><label>Rückfahrt bis – Ankunft zuhause</label><input type="time" data-k="RZende${d*2}"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Pause während Rückfahrt</label><input type="time" data-k="PauseRZ${d*2}" value="00:00"></div>
+      <div class="field"><label>Pause während Rückfahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${d*2}" value="0" placeholder="Minuten"></div>
       <div class="field"><label>Reisezeit netto</label><input type="text" data-calc="rr${d}" readonly></div>
     </div>
     <div class="row">
@@ -319,10 +319,12 @@ function minutesBetween(a,b){
   let x=pa[0]*60+pa[1],y=pb[0]*60+pb[1];if(y<x)y+=1440;return y-x;
 }
 function pauseMinutes(v){
-  if(!v)return 0;
-  const n=v.trim().match(/^(\\d{1,2}):(\\d{2})$/);
+  if(v===null||v===undefined||String(v).trim()==="")return 0;
+  const raw=String(v).trim();
+  const n=raw.match(/^(\d{1,2}):(\d{2})$/);
   if(n)return (+n[1])*60+(+n[2]);
-  const x=parseFloat(v.replace(",",".")); return Number.isFinite(x)?Math.round(x*60):0;
+  const x=parseFloat(raw.replace(",","."));
+  return Number.isFinite(x)?Math.max(0,Math.round(x)):0;
 }
 function fmtMin(m){m=Math.max(0,Math.round(m));return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");}
 function getActiveDays(){
