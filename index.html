@@ -27,7 +27,14 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 @media (orientation:landscape) and (min-width: 900px){.grid{grid-template-columns:repeat(2,1fr)}}
 .install-note{background:#eef2ff;border-radius:12px;padding:10px 12px;font-size:13px;margin-top:10px;color:#374151}
 </style>
-</head>
+<style>
+.daybox{background:#fff;border-radius:12px;padding:12px;margin:12px 0;border:1px solid #ddd}
+.daybox h3{margin:0 0 10px;font-size:17px}
+.sectiontitle{font-weight:700;margin:12px 0 6px;padding-top:8px;border-top:1px solid #eee}
+.field label{display:block;font-size:13px;font-weight:650;margin:0 0 4px}
+.field input{width:100%;min-height:40px}
+.daybox .row{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:7px 0}
+</style></head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Wypełnij raport na iPadzie</div></header>
 <main>
@@ -75,26 +82,48 @@ const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signd
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
 for(let d=1;d<=6;d++){
   $("times").insertAdjacentHTML("beforeend",`
-  <div style="border-top:1px solid #ddd;padding-top:10px;margin-top:10px">
-    <h3 style="font-size:15px;margin:0 0 6px">Tag ${d}</h3>
-    <label>Datum</label><input type="date" data-day="${d}" class="daydate">
+  <div class="daybox">
+    <h3>Tag ${d}</h3>
+    <div class="field"><label>Datum</label><input type="date" data-day="${d}" class="daydate"></div>
+
+    <div class="sectiontitle">Anfahrt</div>
     <div class="row">
-      <input type="time" data-k="RZstart${(d*2)-1}">
-      <input type="time" data-k="RZende${(d*2)-1}">
-      <input type="time" data-k="PauseRZ${(d*2)-1}" value="00:00">
-      <input type="time" data-k="AZstart${(d*2)-1}">
-      <input type="time" data-k="AZende${(d*2)-1}">
-      <input type="time" data-k="PauseAZ${(d*2)-1}" value="00:00">
+      <div class="field"><label>Von – Abfahrt</label><input type="time" data-k="RZstart${(d*2)-1}" aria-label="Anfahrt von"></div>
+      <div class="field"><label>Bis – Ankunft</label><input type="time" data-k="RZende${(d*2)-1}" aria-label="Anfahrt bis"></div>
     </div>
     <div class="row">
-      <input type="number" inputmode="decimal" step="0.1" placeholder="km Anfahrt" data-k="Kilometer${(d*2)-1}">
-      <input type="time" data-k="RZstart${d*2}">
-      <input type="time" data-k="RZende${d*2}">
-      <input type="time" data-k="PauseRZ${d*2}" value="00:00">
-      <input type="number" inputmode="decimal" step="0.1" placeholder="km Rückfahrt" data-k="Kilometer${d*2}">
-      <input disabled placeholder="Netto RZ / AZ">
+      <div class="field"><label>Pause während Fahrt</label><input type="time" data-k="PauseRZ${(d*2)-1}" value="00:00" aria-label="Pause Fahrt"></div>
+      <div class="field"><label>Reisezeit netto</label><input type="text" data-calc="rt${d}" readonly></div>
     </div>
-    <div class="muted" id="routeInfo${d}">Dzień 1: km są pobierane z listy klienta. Dni 2–6: km możesz wpisać ręcznie. Godziny wybierasz zegarem.</div>
+    <div class="row">
+      <div class="field"><label>KM Anfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${(d*2)-1}" placeholder="KM"></div>
+      <div class="field"><label>Arbeitszeit netto</label><input type="text" data-calc="wt${d}" readonly></div>
+    </div>
+
+    <div class="sectiontitle">Arbeitszeit</div>
+    <div class="row">
+      <div class="field"><label>Von – Arbeitsbeginn</label><input type="time" data-k="AZstart${(d*2)-1}" aria-label="Arbeitszeit von"></div>
+      <div class="field"><label>Bis – Arbeitsende</label><input type="time" data-k="AZende${(d*2)-1}" aria-label="Arbeitszeit bis"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Pause Arbeit</label><input type="time" data-k="PauseAZ${(d*2)-1}" value="00:00" aria-label="Pause Arbeit"></div>
+      <div class="field"><label>Arbeitszeit netto</label><input type="text" data-calc="wt2${d}" readonly></div>
+    </div>
+
+    <div class="sectiontitle">Rückfahrt</div>
+    <div class="row">
+      <div class="field"><label>Von – Abfahrt</label><input type="time" data-k="RZstart${d*2}" aria-label="Rückfahrt von"></div>
+      <div class="field"><label>Bis – Ankunft zuhause</label><input type="time" data-k="RZende${d*2}" aria-label="Rückfahrt bis"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Pause während Rückfahrt</label><input type="time" data-k="PauseRZ${d*2}" value="00:00" aria-label="Pause Rückfahrt"></div>
+      <div class="field"><label>Reisezeit netto</label><input type="text" data-calc="rr${d}" readonly></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>KM Rückfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${d*2}" placeholder="KM"></div>
+      <div class="field"><label>Gesamtzeit netto</label><input type="text" data-calc="total${d}" readonly></div>
+    </div>
+    <div class="muted" id="routeInfo${d}">${d===1?"Po wybraniu firmy dzień 1 pobiera km i czas jazdy z listy klienta.":"KM tego dnia możesz wpisać ręcznie. Czas jazdy i pracy liczy się z godzin von/bis."}</div>
   </div>`);
 }
 
@@ -102,52 +131,47 @@ function parseRoute(c){
   const s=String(c?.notatki||"").replace(",",".");
   const km=(s.match(/(\d+(?:\.\d+)?)\s*km/i)||[])[1];
   const h=(s.match(/(\d+(?:\.\d+)?)\s*h/i)||[])[1];
-  return {km:km?parseFloat(km):0, minutes:h?Math.round(parseFloat(h)*60):0};
+  return {km:km?parseFloat(km):0,minutes:h?Math.round(parseFloat(h)*60):0};
 }
 function addMinutesToTime(t,mins){
-  if(!t||!mins)return "";
-  const p=t.trim().split(":").map(Number);
+  if(!t || !mins)return "";
+  const p=t.split(":").map(Number);
   if(p.length<2||p.some(Number.isNaN))return "";
-  let m=p[0]*60+p[1]+mins;
-  m=((m%1440)+1440)%1440;
+  let m=p[0]*60+p[1]+mins; m=((m%1440)+1440)%1440;
   return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
 }
-function fillRouteForDay(d,c){
+function fillCustomerDay1(){
+  const c=companies && companies[+$("company").value]; if(!c)return;
   const r=parseRoute(c);
-  const a=(d*2)-1,b=d*2;
-  const q=k=>document.querySelector(`[data-k="${k}"]`) || {value:""};
-  if(r.km && d===1){
-    q(`Kilometer${a}`).value=String(r.km).replace(".",",");
-    q(`Kilometer${b}`).value=String(r.km).replace(".",",");
-  } else if(d>1){
-    q(`Kilometer${a}`).value="";
-    q(`Kilometer${b}`).value="";
+  const q=k=>document.querySelector(`[data-k="${k}"]`);
+  if(r.km){
+    if(q("Kilometer1"))q("Kilometer1").value=r.km;
+    if(q("Kilometer2"))q("Kilometer2").value=r.km;
   }
-  const s1=q(`RZstart${a}`).value, s2=q(`RZstart${b}`).value;
   if(r.minutes){
-    if(s1) q(`RZende${a}`).value=addMinutesToTime(s1,r.minutes);
-    if(s2) q(`RZende${b}`).value=addMinutesToTime(s2,r.minutes);
+    const a=q("RZstart1"),ae=q("RZende1"),b=q("RZstart2"),be=q("RZende2");
+    if(a&&ae&&a.value)ae.value=addMinutesToTime(a.value,r.minutes);
+    if(b&&be&&b.value)be.value=addMinutesToTime(b.value,r.minutes);
   }
-  const info=$(`routeInfo${d}`);
-  if(info){
-    info.textContent=r.km&&r.minutes
-      ? `Aus Kundenliste: ${r.km} km und ${fmtMin(r.minutes)} Fahrzeit je Strecke. KM werden am ersten Tag automatisch eingetragen; an weiteren Tagen kannst du die KM manuell eingeben. RZ-Ende wird automatisch aus RZ-Start berechnet.`
-      : (r.km ? `Aus Kundenliste: ${r.km} km je Strecke. Fahrzeit ist nicht hinterlegt.` :
-         (r.minutes ? `Aus Kundenliste: ${fmtMin(r.minutes)} Fahrzeit je Strecke. Kilometer sind nicht hinterlegt.` :
-         "Für diesen Kunden sind keine Fahrdaten in der Kundenliste hinterlegt."));
-  }
+  $("routeInfo1").textContent=r.km&&r.minutes
+    ? `Z listy klienta: ${r.km} km i ${fmtMin(r.minutes)} jazdy w jedną stronę. Wpisz godzinę wyjazdu LUB przyjazdu — druga zostanie wyliczona.`
+    : "Brak kompletnych danych jazdy dla tej firmy.";
   recalcTimes();
 }
+
 fetch("companies.json").then(r=>r.json()).then(x=>{
   companies=x;
   $("company").innerHTML='<option value="">— wybierz firmę —</option>'+x.map((c,i)=>`<option value="${i}">${c.firma}</option>`).join("");
   $("company").onchange=()=>{
-    let c=companies[+$("company").value];
+    const c=companies[+$("company").value];
     if(!c)return;
-    let a=address(c.adres);
-    $("street").value=a[0];$("city").value=a[1];
-    for(let d=1;d<=6;d++) fillRouteForDay(d,c);
+    const a=address(c.adres);
+    $("street").value=a[0]; $("city").value=a[1];
+    fillCustomerDay1();
   };
+}).catch(err=>{
+  console.error(err);
+  $("company").innerHTML='<option value="">Nie udało się wczytać firm</option>';
 });
 
 function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
@@ -169,32 +193,38 @@ function fmtMin(m){m=Math.max(0,Math.round(m));return String(Math.floor(m/60)).p
 function recalcTimes(){
   let travel=0,work=0,km=0;
   for(let d=1;d<=6;d++){
-    const a=(d*2)-1,b=d*2;
-    const q=k=>document.querySelector(`[data-k="${k}"]`) || {value:""};
+    const a=d*2-1,b=d*2;
+    const q=k=>document.querySelector(`[data-k="${k}"]`)||{value:""};
     const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value));
     const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
     const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value));
-    travel+=rt+rr;work+=wt;
-    km+=(parseFloat((q(`Kilometer${a}`).value||"").replace(",","."))||0);
-    km+=(parseFloat((q(`Kilometer${b}`).value||"").replace(",","."))||0);
+    travel+=rt+rr; work+=wt;
+    km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
+    km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
+    const setcalc=(name,val)=>{const el=document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
+    setcalc(`rt${d}`,rt); setcalc(`wt${d}`,wt); setcalc(`wt2${d}`,wt); setcalc(`rr${d}`,rr); setcalc(`total${d}`,rt+wt+rr);
   }
   $("travelTotal").value=fmtMin(travel);
   $("workTotal").value=fmtMin(work);
   $("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
   $("allTotal").value=fmtMin(travel+work);
 }
+
 document.querySelectorAll("#times input").forEach(el=>el.addEventListener("input",()=>{
-  const m=el.dataset.k||"";
-  const hit=m.match(/^RZstart(\d+)$/);
-  if(hit){
-    const idx=+hit[1], d=Math.ceil(idx/2), c=companies[+$("company").value];
-    if(c){
-      const r=parseRoute(c);
-      const end=document.querySelector(`[data-k="RZende${idx}"]`);
-      if(end && r.minutes) end.value=addMinutesToTime(el.value,r.minutes);
-      fillRouteForDay(d,c);
+  const key=el.dataset.k||"";
+  const c=companies && companies[+$("company").value];
+  if(c){
+    const r=parseRoute(c);
+    const pairs={RZstart1:"RZende1",RZende1:"RZstart1",RZstart2:"RZende2",RZende2:"RZstart2"};
+    const other=pairs[key];
+    if(other && r.minutes && el.value){
+      const target=document.querySelector(`[data-k="${other}"]`);
+      if(target){
+        target.value=key.startsWith("RZstart")?addMinutesToTime(el.value,r.minutes):addMinutesToTime(el.value,-r.minutes);
+      }
     }
-  } else recalcTimes();
+  }
+  recalcTimes();
 }));
 recalcTimes();
 
