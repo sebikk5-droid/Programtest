@@ -200,7 +200,9 @@ function quarterTimeOptions(){
 }
 function initQuarterTimeSelects(root=document){
   root.querySelectorAll("select.quarter-time").forEach(s=>{
+    const value=s.value;
     if(!s.options.length) s.innerHTML=quarterTimeOptions();
+    if(value) s.value=value;
   });
 }
 
@@ -276,7 +278,10 @@ $("addDay").onclick=()=>{
   visibleDays=d;
   bindTimeInputs();
 document.getElementById("times").addEventListener("change",e=>{
-  if(e.target.matches("select.quarter-time")) recalcTimes();
+  if(e.target.matches("select.quarter-time")){
+    recalcTimes();
+    bindTimeInputs();
+  }
 });
 
   // Same automatic customer data as day 1.
