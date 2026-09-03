@@ -602,7 +602,7 @@ function getActiveDays(){
 }
 function recalcTimes(){
   let travel=0,work=0,km=0;
-  for(let d=1;d<=visibleDays;d++){
+  for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
     const q=k=>document.querySelector(`[data-k="${k}"]`)||{value:""};
 
@@ -804,7 +804,8 @@ function isoAddDays(iso,n){
   return d.toISOString().slice(0,10);
 }
 function pdfDateFromDay(dayNo){
-  const el=document.querySelector(`.daydate[data-day="${dayNo}"]`);
+  const box=document.querySelector(`[data-daybox="${dayNo}"]`);
+  const el=box?.querySelector(".daydate");
   return el?.value || isoAddDays($("date")?.value||"", Number(dayNo)-1);
 }
 set(form,"Firma",c?c.firma:$("company").value);set(form,"Straße",$("street").value);set(form,"PLZ, Ort",$("city").value);
@@ -944,6 +945,9 @@ $("share").onclick=async()=>{
     while(visibleDays<target){
       const d=visibleDays+1;
       addBtn.insertAdjacentHTML("beforebegin",dayTemplate(d));
+      const newDayBox=times.querySelector(`[data-daybox="${d}"]`);
+      const newDayDate=newDayBox?.querySelector(".daydate");
+      if(newDayDate) newDayDate.value=isoAddDays($("date")?.value||"",d-1);
       initQuarterTimeSelects(times);
       const box=times.querySelector(`[data-daybox="${d}"]`);
       if(box) box.setAttribute("data-day-active","1");
