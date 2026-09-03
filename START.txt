@@ -7,3 +7,5 @@ Date fix:
 - no changes to filename/folder/history logic
 
 V27.6.51 – poprawka: daty dla wierszy Reise-/Arbeitszeit są pobierane z daty Tag; jeśli Tag nie ma daty, automatycznie z Einsatzdatum + numer dnia. Data trafia do obu wierszy danego dnia.
+
+V27.6.58: current-report PDF snapshot captured on Generate; company change cancels stale Safari restore and invalidates previous PDF blob; filename uses selected company.
