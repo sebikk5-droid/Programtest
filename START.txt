@@ -1,7 +1,12 @@
 Servicebericht – Projektbasis
 
-V27.6.45:
-- Der aktuelle Formularzustand wird direkt vor PDF-Erstellung gesichert.
-- Nach PDF-Erstellung wird derselbe Formularzustand sofort wiederhergestellt.
-- Bei Safari/iPadOS pageshow wird zuerst der exakte Zustand von vor PDF geladen.
-- Auch bei PDF-Fehlern bleibt der aktuelle Bericht erhalten.
+V27.6.46:
+- Der aktuelle Bericht wird unmittelbar vor PDF-Erstellung als exakter
+  Formularzustand markiert.
+- Bei Safari/iPadOS pageshow wird nur dieser ausdrücklich markierte Zustand
+  wiederhergestellt.
+- Die PDF-Erstellung hat keinen zweiten, konkurrierenden Auto-Speicher-Handler
+  mehr.
+- Der zusätzliche kombinierte PDF-Speicher-Listener wurde entfernt.
+- Gespeicherte Berichte, Kundenliste und die bestehende Speichern/Öffnen-Logik
+  bleiben erhalten.
