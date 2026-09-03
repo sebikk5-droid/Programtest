@@ -820,10 +820,7 @@ function bindTimeInputs(){
 bindTimeInputs();
 recalcTimes();
 
-saveCurrentPdfReturnState();
-
   $("generate").onclick=async()=>{
-  savePdfReturnState();
 $("status").textContent="PDF wird erstellt…";
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
