@@ -1004,7 +1004,7 @@ $("share").onclick=async()=>{
         const item=currentHistoryItem();
         const idx=sel && sel.value!=="" ? Number(sel.value) : -1;
 
-        // Keep the existing Gespeicherte Berichte logic unchanged.
+        // Existing Gespeicherte Berichte logic is unchanged.
         if(idx>=0 && list[idx]) list[idx]=item;
         else list.push(item);
 
@@ -1019,37 +1019,38 @@ $("share").onclick=async()=>{
           savedAt:new Date().toISOString(),
           history:list
         },null,2);
-        const blob=new Blob([json],{type:"application/json"});
-        const file=new File([blob],suggested,{type:"application/json"});
 
-        // iPad/iPhone: Safari and Chrome on iOS both use Apple's native
-        // share/file layer. Use the same path in both browsers so the
-        // existing „＋ Speichern“ button behaves identically.
-        const isIOS =
+        // IMPORTANT:
+        // Safari on iPad/iPhone does NOT support showSaveFilePicker.
+        // Its file-sharing support is MIME-type sensitive. Using
+        // application/json can make canShare() return false and causes the
+        // browser to fall back to a normal download dialog.
+        //
+        // Therefore, on Apple mobile we pass the file directly to the native
+        // share sheet and deliberately do NOT gate navigator.share() behind
+        // canShare(). The file keeps the .json filename, while text/plain is
+        // broadly accepted by iOS as a shareable document.
+        const isAppleMobile =
           /iPad|iPhone|iPod/.test(navigator.userAgent) ||
           (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
 
-        if(isIOS && typeof navigator.share==="function"){
+        const blob=new Blob([json],{type:"text/plain"});
+        const file=new File([blob],suggested,{type:"text/plain"});
+
+        if(isAppleMobile && typeof navigator.share==="function"){
           try{
-            const canShareFiles =
-              typeof navigator.canShare!=="function" ||
-              navigator.canShare({files:[file]});
-            if(canShareFiles){
-              await navigator.share({
-                files:[file],
-                title:suggested,
-                text:"Servicebericht Historie speichern"
-              });
-              $("status").textContent="Historie gespeichert.";
-              return;
-            }
+            await navigator.share({files:[file]});
+            $("status").textContent="Historie gespeichert.";
+            return;
           }catch(e){
             if(e?.name==="AbortError") return;
+            // Continue to desktop/final fallback if the native share
+            // operation is unavailable or rejected.
           }
         }
 
-        // Chrome/Edge/other browsers with File System Access:
-        // retain the real Save-As picker with folder selection.
+        // Desktop browsers with the File System Access API get the real
+        // „Speichern unter“ picker and folder selection.
         if(typeof window.showSaveFilePicker==="function"){
           try{
             const handle=await window.showSaveFilePicker({
@@ -1060,7 +1061,7 @@ $("share").onclick=async()=>{
               }]
             });
             const writable=await handle.createWritable();
-            await writable.write(blob);
+            await writable.write(new Blob([json],{type:"application/json"}));
             await writable.close();
             $("status").textContent="Historie gespeichert.";
             return;
@@ -1069,8 +1070,8 @@ $("share").onclick=async()=>{
           }
         }
 
-        // Last fallback for browsers without either native mechanism.
-        const url=URL.createObjectURL(blob);
+        // Last fallback for browsers without native file/share support.
+        const url=URL.createObjectURL(new Blob([json],{type:"application/json"}));
         const a=document.createElement("a");
         a.href=url;
         a.download=suggested;
