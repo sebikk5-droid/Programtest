@@ -1004,36 +1004,36 @@ $("share").onclick=async()=>{
         const item=currentHistoryItem();
         const idx=sel && sel.value!=="" ? Number(sel.value) : -1;
 
+        // Existing Gespeicherte Berichte remains the single source of truth.
         if(idx>=0 && list[idx]) list[idx]=item;
         else list.push(item);
 
-        // Keep the existing Gespeicherte Berichte history exactly as before.
         saveHistory(list);
         refresh();
         if(sel) sel.value=String(idx>=0 && idx<list.length ? idx : list.length-1);
 
         const suggested=item.name.replace(/[\\/:*?"<>|]/g,"_")+"_Historie.json";
-        const blob=new Blob([JSON.stringify({
+        const json=JSON.stringify({
           format:"Servicebericht-Historie",
           version:1,
           savedAt:new Date().toISOString(),
           history:list
-        },null,2)],{type:"application/json"});
+        },null,2);
 
-        // The only API that actually exposes a save-location picker is
-        // showSaveFilePicker. Use it whenever the browser provides it.
+        // The iPad/iPhone solution uses the native document/file picker
+        // through the browser. If Safari supports the File System Access API,
+        // this is the exact "Save As" flow with folder selection.
         if(typeof window.showSaveFilePicker==="function"){
           try{
             const handle=await window.showSaveFilePicker({
               suggestedName:suggested,
-              excludeAcceptAllOption:false,
               types:[{
                 description:"Servicebericht Historie",
                 accept:{"application/json":[".json"]}
               }]
             });
             const writable=await handle.createWritable();
-            await writable.write(blob);
+            await writable.write(json);
             await writable.close();
             $("status").textContent="Historie gespeichert.";
             return;
@@ -1042,39 +1042,25 @@ $("share").onclick=async()=>{
           }
         }
 
-        // iPadOS Safari versions without File System Access API cannot
-        // programmatically open a Save-As folder chooser. Do not silently
-        // claim that a location was selected. Hand the real file to Files;
-        // the user can choose "In Dateien sichern" there.
-        const file=new File([blob],suggested,{type:"application/json"});
-        if(typeof navigator.share==="function"){
-          try{
-            const canFiles=!navigator.canShare || navigator.canShare({files:[file]});
-            if(canFiles){
-              await navigator.share({files:[file],title:"Servicebericht Historie"});
-              $("status").textContent="Historie gespeichert.";
-              return;
-            }
-          }catch(e){
-            if(e?.name==="AbortError") return;
-          }
-        }
-
+        // Safari/iPadOS fallback: use a real file URL. The OS handles it
+        // through Files. No new visible button and no separate history.
+        const blob=new Blob([json],{type:"application/json"});
         const url=URL.createObjectURL(blob);
         const a=document.createElement("a");
         a.href=url;
         a.download=suggested;
+        a.target="_blank";
         a.rel="noopener";
         document.body.appendChild(a);
         a.click();
         a.remove();
         setTimeout(()=>URL.revokeObjectURL(url),5000);
-        $("status").textContent="Historie wurde als Datei bereitgestellt.";
+        $("status").textContent="Historie-Datei wurde bereitgestellt.";
       }catch(e){
         if(e?.name!=="AbortError")
           alert("Historie konnte nicht gespeichert werden: "+(e?.message||e));
       }
-    });;;
+    });;
 
     // Selecting an entry in the existing „Gespeicherte Berichte“ window
     // loads that exact entry. No second history/list is created.
