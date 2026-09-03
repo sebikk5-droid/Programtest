@@ -1016,7 +1016,6 @@ $("share").onclick=async()=>{
         const dateToday=`${pad(today.getDate())}.${pad(today.getMonth()+1)}.${today.getFullYear()}`;
         const companyName=(item.name||"Bericht").trim().replace(/[\\/:*?"<>|]/g,"_");
         const suggestedBase=`${companyName}_${dateToday}.json`;
-
         const json=JSON.stringify({
           format:"Servicebericht-Historie",
           version:1,
@@ -1025,7 +1024,7 @@ $("share").onclick=async()=>{
         },null,2);
         const blob=new Blob([json],{type:"application/json"});
 
-        // Chrome/Edge/Desktop: native Save-As picker.
+        // Chromium: keep the native Save-As dialog exactly as before.
         if(window.showSaveFilePicker){
           try{
             const fh=await window.showSaveFilePicker({
@@ -1045,25 +1044,60 @@ $("share").onclick=async()=>{
           }
         }
 
-        // iPad/iPhone Safari: direct single-file download.
-        // Web Share is deliberately not used because it can create an
-        // additional "Text" item in the Files share sheet.
-        let filename=suggestedBase;
+        // Safari/iPadOS: first try the File System Access API if available
+        // under the exact save-file picker name. Some newer Safari builds
+        // expose parts of this API behind platform/version conditions.
+        if(typeof window.showSaveFilePicker==="function"){
+          try{
+            const fh=await window.showSaveFilePicker({suggestedName:suggestedBase});
+            const w=await fh.createWritable();
+            await w.write(blob);
+            await w.close();
+            $("status").textContent="Historie gespeichert.";
+            return;
+          }catch(e){
+            if(e?.name==="AbortError") return;
+          }
+        }
+
+        // Safari fallback: use the native file input in "open" mode to let
+        // the user choose a directory is not supported by ordinary Safari.
+        // Do not create a second Text share item. We use a single file and
+        // expose the OS file chooser through a temporary download button.
         const entered=prompt("Dateiname für den Bericht:",suggestedBase);
         if(entered===null) return;
         const cleaned=entered.trim().replace(/[\\/:*?"<>|]/g,"_");
-        if(cleaned) filename=cleaned.endsWith(".json")?cleaned:cleaned+".json";
+        const filename=cleaned ? (cleaned.endsWith(".json")?cleaned:cleaned+".json") : suggestedBase;
 
+        // Use a transient visible download link so Safari treats this as a
+        // user-selected file operation. Exactly one JSON object is emitted.
         const url=URL.createObjectURL(blob);
         const a=document.createElement("a");
         a.href=url;
         a.download=filename;
-        a.rel="noopener";
-        a.style.display="none";
+        a.textContent=filename;
+        a.style.position="fixed";
+        a.style.left="50%";
+        a.style.top="50%";
+        a.style.transform="translate(-50%,-50%)";
+        a.style.zIndex="99999";
+        a.style.padding="12px 18px";
+        a.style.background="white";
+        a.style.border="1px solid #999";
+        a.style.borderRadius="8px";
+        a.style.fontSize="16px";
+        a.style.color="black";
+        a.style.textDecoration="none";
+        a.setAttribute("aria-label","Datei speichern");
         document.body.appendChild(a);
         a.click();
-        a.remove();
-        setTimeout(()=>URL.revokeObjectURL(url),10000);
+
+        // Keep the link for Safari to finish the native download; remove it
+        // shortly afterwards. No navigator.share() is used.
+        setTimeout(()=>{
+          a.remove();
+          URL.revokeObjectURL(url);
+        },1500);
 
         $("status").textContent="Historie gespeichert.";
       }catch(e){
