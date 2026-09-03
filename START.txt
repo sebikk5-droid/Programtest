@@ -1,9 +1,9 @@
 Servicebericht – Projektbasis
 
-V27.6.43:
-- Automatischer lokaler Entwurf (Arbeitsstand) während der Bearbeitung.
-- Der aktuelle Bericht wird vor PDF-Erstellung gesichert.
-- Nach Rückkehr aus PDF wird der Arbeitsstand automatisch wiederhergestellt.
-- Dadurch gehen ungespeicherte Eingaben nicht verloren.
-- Gespeicherte Berichte bleiben separat und unverändert.
-- Keine zusätzlichen START-Dateien verwenden.
+V27.6.44:
+- Robuster lokaler Entwurf für den aktuell bearbeiteten Bericht.
+- Jede Eingabe wird lokal gespeichert.
+- Vor PDF-Erstellung wird der aktuelle Stand nochmals gesichert.
+- Nach Rückkehr/Neuladen durch Safari/iPadOS wird der Entwurf wiederhergestellt.
+- „Zurücksetzen“ löscht den Entwurf.
+- Gespeicherte Berichte, PDF, Kundenliste und Speichern/Öffnen bleiben erhalten.
