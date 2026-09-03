@@ -1004,15 +1004,15 @@ $("share").onclick=async()=>{
         const item=currentHistoryItem();
         const idx=sel && sel.value!=="" ? Number(sel.value) : -1;
 
+        // Existing Gespeicherte Berichte remains the single source of truth.
         if(idx>=0 && list[idx]) list[idx]=item;
         else list.push(item);
 
         saveHistory(list);
         refresh();
-
         if(sel) sel.value=String(idx>=0 && idx<list.length ? idx : list.length-1);
 
-        // Optional local backup of this SAME history.
+        // Local backup of exactly the SAME history.
         const suggested=item.name.replace(/[\\/:*?"<>|]/g,"_")+"_Historie.json";
         const blob=new Blob([JSON.stringify({
           format:"ServiceBericht-Historie",
@@ -1021,48 +1021,61 @@ $("share").onclick=async()=>{
           history:list
         },null,2)],{type:"application/json"});
 
+        // Desktop / browsers with a real file picker.
         if(window.showSaveFilePicker){
           try{
             const handle=await window.showSaveFilePicker({
               suggestedName:suggested,
-              types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
+              types:[{
+                description:"Servicebericht Historie",
+                accept:{"application/json":[".json"]}
+              }]
             });
-            const w=await handle.createWritable();
-            await w.write(blob);
-            await w.close();
+            const writable=await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            $("status").textContent="Historie gespeichert.";
             return;
           }catch(e){
             if(e?.name==="AbortError") return;
+            // If iPadOS exposes the API but cannot write, continue to
+            // the native iOS/iPadOS file-sharing route below.
           }
         }
 
+        // iPad/iPhone: create a real JSON file and use the native share
+        // sheet. The user can choose „In Dateien sichern“ and then the
+        // exact destination folder.
         const file=new File([blob],suggested,{type:"application/json"});
         if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
           try{
             await navigator.share({
               files:[file],
-              title:"Servicebericht Historie",
-              text:"Historie speichern"
+              title:"Servicebericht Historie"
             });
+            $("status").textContent="Historie gespeichert.";
             return;
           }catch(e){
             if(e?.name==="AbortError") return;
           }
         }
 
+        // Final fallback for browsers without picker/share support.
+        const url=URL.createObjectURL(blob);
         const a=document.createElement("a");
-        a.href=URL.createObjectURL(blob);
+        a.href=url;
         a.download=suggested;
-        a.target="_blank";
+        a.style.display="none";
         document.body.appendChild(a);
         a.click();
         a.remove();
-        setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+        setTimeout(()=>URL.revokeObjectURL(url),5000);
+        $("status").textContent="Historie zum Speichern geöffnet.";
       }catch(e){
         if(e?.name!=="AbortError")
           alert("Historie konnte nicht gespeichert werden: "+(e?.message||e));
       }
-    });
+    });;
 
     // Selecting an entry in the existing „Gespeicherte Berichte“ window
     // loads that exact entry. No second history/list is created.
