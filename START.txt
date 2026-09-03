@@ -1,7 +1,9 @@
 Servicebericht – Projektbasis
 
-V27.6.42:
-- PDF-Rückkehr: der aktuell bearbeitete Bericht wird vor PDF-Erstellung
-  temporär gespeichert und nach pageshow wiederhergestellt.
-- Speichern/Öffnen der Historie und PDF-Funktionen bleiben erhalten.
+V27.6.43:
+- Automatischer lokaler Entwurf (Arbeitsstand) während der Bearbeitung.
+- Der aktuelle Bericht wird vor PDF-Erstellung gesichert.
+- Nach Rückkehr aus PDF wird der Arbeitsstand automatisch wiederhergestellt.
+- Dadurch gehen ungespeicherte Eingaben nicht verloren.
+- Gespeicherte Berichte bleiben separat und unverändert.
 - Keine zusätzlichen START-Dateien verwenden.
