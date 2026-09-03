@@ -1475,5 +1475,18 @@ $("share").onclick=async()=>{
   else installCombined();
 })();
 </script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./sw.js", {updateViaCache:"none"}).then(function(reg){
+      reg.update();
+    }).catch(function(err){
+      console.warn("Service Worker:", err);
+    });
+  });
+}
+</script>
+
 </body>
 </html>
