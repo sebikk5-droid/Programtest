@@ -1,1 +1,12 @@
-{"name": "Service-Bericht", "short_name": "Service Bericht", "start_url": "./index.html", "display": "standalone", "background_color": "#f2f2f7", "theme_color": "#ffffff", "icons": []}
+{
+  "dir": "ltr",
+  "lang": "de",
+  "name": "Service Bericht",
+  "short_name": "Service Bericht",
+  "display": "standalone",
+  "start_url": "./",
+  "scope": "./",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": []
+}

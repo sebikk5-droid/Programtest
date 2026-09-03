@@ -82,6 +82,11 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .day-collapsed .day-body,
 .day-collapsed .day-fields{display:none!important}
 </style>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Service Bericht">
+<meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
@@ -1006,7 +1011,6 @@ $("share").onclick=async()=>{
 
         if(idx>=0 && list[idx]) list[idx]=item;
         else list.push(item);
-
         saveHistory(list);
         refresh();
         if(sel) sel.value=String(idx>=0 && idx<list.length ? idx : list.length-1);
@@ -1024,15 +1028,12 @@ $("share").onclick=async()=>{
         },null,2);
         const blob=new Blob([json],{type:"application/json"});
 
-        // Chromium: keep the native Save-As dialog exactly as before.
+        // Chrome/Edge: native Save As remains the preferred path.
         if(window.showSaveFilePicker){
           try{
             const fh=await window.showSaveFilePicker({
               suggestedName:suggestedBase,
-              types:[{
-                description:"Servicebericht Historie",
-                accept:{"application/json":[".json"]}
-              }]
+              types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
             });
             const w=await fh.createWritable();
             await w.write(blob);
@@ -1044,12 +1045,14 @@ $("share").onclick=async()=>{
           }
         }
 
-        // Safari/iPadOS: first try the File System Access API if available
-        // under the exact save-file picker name. Some newer Safari builds
-        // expose parts of this API behind platform/version conditions.
-        if(typeof window.showSaveFilePicker==="function"){
+        // PWA test: if the browser exposes the File System Access API under
+        // a web-app context, use it. This path is deliberately feature-tested.
+        if(window.isSecureContext && window.showSaveFilePicker){
           try{
-            const fh=await window.showSaveFilePicker({suggestedName:suggestedBase});
+            const fh=await window.showSaveFilePicker({
+              suggestedName:suggestedBase,
+              types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
+            });
             const w=await fh.createWritable();
             await w.write(blob);
             await w.close();
@@ -1060,45 +1063,31 @@ $("share").onclick=async()=>{
           }
         }
 
-        // Safari fallback: use the native file input in "open" mode to let
-        // the user choose a directory is not supported by ordinary Safari.
-        // Do not create a second Text share item. We use a single file and
-        // expose the OS file chooser through a temporary download button.
+        // Safari/PWA diagnostic: do not silently pretend that a folder picker
+        // exists. If unavailable, report the platform capability instead of
+        // producing the old two-item share result.
+        const isIOS =
+          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+
+        if(isIOS){
+          alert("TEST: Safari/iPadOS stellt für diese Web-App keinen lokalen „Speichern unter“-Ordner-Picker bereit. PWA-Modus erkannt: "+(window.matchMedia("(display-mode: standalone)").matches?"JA":"NEIN")+".");
+          return;
+        }
+
         const entered=prompt("Dateiname für den Bericht:",suggestedBase);
         if(entered===null) return;
         const cleaned=entered.trim().replace(/[\\/:*?"<>|]/g,"_");
-        const filename=cleaned ? (cleaned.endsWith(".json")?cleaned:cleaned+".json") : suggestedBase;
-
-        // Use a transient visible download link so Safari treats this as a
-        // user-selected file operation. Exactly one JSON object is emitted.
+        const filename=cleaned?(cleaned.endsWith(".json")?cleaned:cleaned+".json"):suggestedBase;
         const url=URL.createObjectURL(blob);
         const a=document.createElement("a");
         a.href=url;
         a.download=filename;
-        a.textContent=filename;
-        a.style.position="fixed";
-        a.style.left="50%";
-        a.style.top="50%";
-        a.style.transform="translate(-50%,-50%)";
-        a.style.zIndex="99999";
-        a.style.padding="12px 18px";
-        a.style.background="white";
-        a.style.border="1px solid #999";
-        a.style.borderRadius="8px";
-        a.style.fontSize="16px";
-        a.style.color="black";
-        a.style.textDecoration="none";
-        a.setAttribute("aria-label","Datei speichern");
+        a.style.display="none";
         document.body.appendChild(a);
         a.click();
-
-        // Keep the link for Safari to finish the native download; remove it
-        // shortly afterwards. No navigator.share() is used.
-        setTimeout(()=>{
-          a.remove();
-          URL.revokeObjectURL(url);
-        },1500);
-
+        a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),10000);
         $("status").textContent="Historie gespeichert.";
       }catch(e){
         if(e?.name!=="AbortError")
@@ -1380,6 +1369,11 @@ $("share").onclick=async()=>{
     document.addEventListener("DOMContentLoaded",installCombined);
   else installCombined();
 })();
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+}
 </script>
 </body>
 </html>
