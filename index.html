@@ -291,7 +291,7 @@ initQuarterTimeSelects($("times"));
 document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
 $("addDay").onclick=()=>{
   if(visibleDays>=6)return;
-  const d=visibleDays+1;
+  const d=document.querySelectorAll('[data-daybox]').length+1;
   $("addDay").insertAdjacentHTML("beforebegin",dayTemplate(d));
   initQuarterTimeSelects($("times"));
   const box=document.querySelector(`[data-daybox="${d}"]`);
@@ -819,10 +819,13 @@ let r=String($("remarks").value||"").split(/\r?\n/).map(x=>x.trim()).filter(Bool
 for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,r[i-1]||"");
 let p=ls($("parts").value);for(let i=1;i<=4;i++)set(form,"Ersatzteile "+i,p[i-1]||"");
 let km=0, travel=0, work=0;
-for(let d=1;d<=visibleDays;d++){
+const dayBoxes=[...document.querySelectorAll("[data-daybox]")];
+for(let d=1;d<=dayBoxes.length;d++){
+  const box=dayBoxes[d-1];
   const a=(d*2)-1,b=d*2;
-  const q=k=>document.querySelector(`[data-k="${k}"]`) || {value:""};
-  const dateIso=pdfDateFromDay(d);
+  const q=k=>box.querySelector(`[data-k="${k}"]`) || {value:""};
+  const dateEl=box.querySelector(".daydate");
+  const dateIso=dateEl?.value || isoAddDays($("date")?.value||"",d-1);
   const date=dateIso?dateIso.split("-").reverse().join("."):"";
   set(form,`Datum${a}`,date);
   set(form,`Datum${b}`,date);
@@ -846,7 +849,7 @@ set(form,"Gesamtzeit",fmtMin(travel+work));
 // approximately 14.2 pt lower. The overnight column is around x=548 pt.
 const page=pdf.getPages()[0];
 const overnightX=548;
-for(let d=1;d<=visibleDays;d++){
+for(let d=1;d<=dayBoxes.length;d++){
   const cb=document.querySelector(`[data-overnight-day="${d}"]`);
   if(cb && cb.checked){
     const row=(d-1)*2+1;
