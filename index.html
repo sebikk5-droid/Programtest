@@ -301,7 +301,8 @@ $("addDay").onclick=()=>{
   visibleDays=d;
   bindTimeInputs();
 
-  // Same automatic customer data as day 1.
+  // Use the selected customer's database values as defaults for this new day.
+  // Tag 1 remains untouched; later days get independent editable fields.
   const r=customerRoute();
   const kmOut=box?.querySelector(`[data-k="Kilometer${d*2-1}"]`);
   const kmBack=box?.querySelector(`[data-k="Kilometer${d*2}"]`);
@@ -311,6 +312,26 @@ $("addDay").onclick=()=>{
     if(kmBack)kmBack.value=r.km;
   }
   if(pause && pause.value==="")pause.value="0";
+
+  if(box && r.minutes){
+    const a1=box.querySelector(`[data-k="RZstart${d*2-1}"]`);
+    const a2=box.querySelector(`[data-k="RZende${d*2-1}"]`);
+    const b1=box.querySelector(`[data-k="RZstart${d*2}"]`);
+    const b2=box.querySelector(`[data-k="RZende${d*2}"]`);
+    // Copy only the time-of-day anchors from Tag 1; calculate duration from DB.
+    const day1Start=document.querySelector('[data-k="RZstart1"]')?.value;
+    const day1WorkEnd=document.querySelector('[data-k="AZende1"]')?.value;
+    const outStart=day1Start || "07:00";
+    const backStart=day1WorkEnd || "17:00";
+    if(a1 && a2 && !a1.value && !a2.value){
+      a1.value=outStart;
+      a2.value=addMinutesToTime(a1.value,r.minutes);
+    }
+    if(b1 && b2 && !b1.value && !b2.value){
+      b1.value=backStart;
+      b2.value=addMinutesToTime(b1.value,r.minutes+pauseMinutes(pause?.value||"0"));
+    }
+  }
 
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
@@ -605,29 +626,27 @@ function recalcTimes(){
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
     const box=document.querySelector(`[data-daybox="${d}"]`);
-    const q=k=>box?.querySelector(`[data-k="${k}"]`)||{value:""};
-    const overrideOut=box?.querySelector('[data-route-override="out"]');
-    const overrideBack=box?.querySelector('[data-route-override="back"]');
-    const routeBase=customerRoute();
-    const outMinutes=(overrideOut && overrideOut.value!=="")
-      ? Math.max(0,parseInt(overrideOut.value,10)||0) : routeBase.minutes;
-    const backMinutes=(overrideBack && overrideBack.value!=="")
-      ? Math.max(0,parseInt(overrideBack.value,10)||0) : routeBase.minutes;
+    if(!box) continue;
+    const q=k=>box.querySelector(`[data-k="${k}"]`)||{value:""};
+    const overrideOut=box.querySelector('[data-route-override="out"]');
+    const overrideBack=box.querySelector('[data-route-override="back"]');
+    const r=customerRoute();
 
-    const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value));
-    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
-    const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value));
+    const outBase=(overrideOut?.value!=="") ? Math.max(0,parseInt(overrideOut.value,10)||0) : r.minutes;
+    const backBase=(overrideBack?.value!=="") ? Math.max(0,parseInt(overrideBack.value,10)||0) : r.minutes;
+
+    const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value||"0"));
+    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value||"0"));
+    const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value||"0"));
+
     travel+=rt+rr; work+=wt;
-    km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
-    km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
+    km+=(parseFloat(String(q(`Kilometer${a}`).value||"").replace(",","."))||0);
+    km+=(parseFloat(String(q(`Kilometer${b}`).value||"").replace(",","."))||0);
 
-    const sc=(name,val)=>{const el=box?.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
-    sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
-
-    if(box){
-      box.dataset.routeOutMinutes=String(outMinutes);
-      box.dataset.routeBackMinutes=String(backMinutes);
-    }
+    const sc=(name,val)=>{const el=box.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
+    sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
+    box.dataset.routeOutMinutes=String(outBase);
+    box.dataset.routeBackMinutes=String(backBase);
   }
   if($("travelTotal"))$("travelTotal").value=fmtMin(travel);
   if($("workTotal"))$("workTotal").value=fmtMin(work);
