@@ -83,7 +83,6 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </style>
 <!-- V27.6.68: PDF is handled by the original generator only; no second click listener. -->
 <!-- V27.6.69: PDF generation remains single-path; lastPdfBlob is produced by the main generator only. Signature area can be added later. -->
-<!-- V27.6.70: invalidate lastPdfBlob at the start of generation; Share is disabled until the new PDF is actually saved. -->
 </head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
@@ -191,7 +190,7 @@ document.querySelectorAll('#choices input').forEach(el=>{
 });
 </script>
 <script>
-const $=id=>document.getElementById(id); let companies=[];
+const $=id=>document.getElementById(id); let companies=[]; let lastPdfBlob=null;
 
 // V27.6.65 — PDF return state
 // Save the exact live report immediately before PDF generation.
@@ -781,8 +780,6 @@ recalcTimes();
 
   $("generate").onclick=async()=>{
 $("status").textContent="PDF wird erstellt…";
-lastPdfBlob=null;
-$("share").disabled=true;
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
 let c=companies[+$("company").value];

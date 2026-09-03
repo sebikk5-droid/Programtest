@@ -20,4 +20,4 @@ V27.6.68: removed duplicate PDF click handler installCombined(). The original ge
 
 V27.6.69: stable continuation of 68. Single PDF path retained; no signature fields added yet. Backup: BACKUP_V27.6.68.zip.
 
-V27.6.70: stale-PDF guard. At start of PDF generation lastPdfBlob is invalidated and Share disabled; Share is re-enabled only after the newly generated PDF is saved. Backup: BACKUP_V27.6.69.zip.
+V27.6.71: reverted the V27.6.70 stale-blob guard because it caused the PDF button to stop responding. Kept the single PDF click handler from 68/69 and explicitly declared lastPdfBlob. No PDF field/signature changes. Source: 69. Backup/source preserved separately.
