@@ -192,6 +192,38 @@ document.querySelectorAll('#choices input').forEach(el=>{
 <script>
 const $=id=>document.getElementById(id); let companies=[];
 
+// V27.6.41: keep the currently edited Bericht visible after the PDF
+// save/share round-trip, which can cause Safari to restore/reload the page.
+const PDF_RETURN_KEY="servicebericht_pdf_return_v2";
+function saveCurrentPdfReturnState(){
+  try{
+    if(typeof currentHistoryItem==="function"){
+      sessionStorage.setItem(PDF_RETURN_KEY,JSON.stringify(currentHistoryItem()));
+    }
+  }catch(e){}
+}
+function restoreCurrentPdfReturnState(){
+  try{
+    const raw=sessionStorage.getItem(PDF_RETURN_KEY);
+    if(!raw) return false;
+    const item=JSON.parse(raw);
+    if(!item || typeof item!=="object") return false;
+    const data=typeof historyItemData==="function" ? historyItemData(item) : null;
+    if(data && typeof applyForm==="function"){
+      applyForm(data);
+      if(typeof recalcTimes==="function") recalcTimes();
+      if(typeof refresh==="function") refresh();
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+window.addEventListener("pageshow",function(){
+  if(restoreCurrentPdfReturnState()){
+    try{ sessionStorage.removeItem(PDF_RETURN_KEY); }catch(e){}
+  }
+});
+
 // V27.6.39: Safari/iPadOS can restore/autofill stale numeric values into
 // these two free-text fields when returning from PDF/share. They must
 // start empty for a new report. Only pure numeric values are cleared;
@@ -769,7 +801,9 @@ function bindTimeInputs(){
 bindTimeInputs();
 recalcTimes();
 
-$("generate").onclick=async()=>{
+saveCurrentPdfReturnState();
+
+  $("generate").onclick=async()=>{
 $("status").textContent="PDF wird erstellt…";
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
