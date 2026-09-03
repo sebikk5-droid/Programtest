@@ -312,6 +312,20 @@ $("addDay").onclick=()=>{
   }
   if(pause && pause.value==="")pause.value="0";
 
+  // Every new day starts with the same customer-based route values as Tag 1.
+  // The copied values are ordinary inputs, so the user can change them
+  // independently for this day.
+  const day1=document.querySelector('[data-daybox="1"]');
+  const copy=(from,to)=>{
+    const a=day1?.querySelector(`[data-k="${from}"]`);
+    const b=box?.querySelector(`[data-k="${to}"]`);
+    if(a&&b)b.value=a.value||"";
+  };
+  copy("RZstart1",`RZstart${d*2-1}`);
+  copy("RZende1",`RZende${d*2-1}`);
+  copy("RZstart2",`RZstart${d*2}`);
+  copy("RZende2",`RZende${d*2}`);
+
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
 };
@@ -566,6 +580,16 @@ fetch("companies.json").then(r=>{
       const r=customerRoute();
       if(r.km){if(a)a.value=r.km;if(b)b.value=r.km;}
       if(p)p.value="45";
+      const day1=document.querySelector('[data-daybox="1"]');
+      const copy=(from,to)=>{
+        const x=day1?.querySelector(`[data-k="${from}"]`);
+        const y=box?.querySelector(`[data-k="${to}"]`);
+        if(x&&y)y.value=x.value||"";
+      };
+      copy("RZstart1",`RZstart${d*2-1}`);
+      copy("RZende1",`RZende${d*2-1}`);
+      copy("RZstart2",`RZstart${d*2}`);
+      copy("RZende2",`RZende${d*2}`);
     }
     recalcTimes();
   };
