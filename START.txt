@@ -1,20 +1,15 @@
-V27.6.35 – PWA / FILE SYSTEM TEST
+SERVICE-BERICHT — iPAD
 
-Basis: BACKUP V27.6.32 ALLES OK.
+Ta wersja jest przygotowana pod iPada.
 
-Test:
-- PWA manifest + service worker added.
-- Existing app UI unchanged.
-- History save remains single-report JSON.
-- Chrome/Edge Save As unchanged.
-- iOS Safari does NOT use navigator.share and does NOT auto-download in this
-  diagnostic build. If no native save picker exists, a diagnostic message
-  states whether the page is running as an installed PWA.
-- This version is a capability test, not a promise that iPadOS exposes a
-  folder picker to GitHub Pages.
+WAŻNE:
+Sam ZIP nie może zostać uruchomiony jako aplikacja bezpośrednio z aplikacji Pliki.
+Najpierw pliki trzeba umieścić pod adresem HTTPS (hosting).
 
-For iPad test:
-1. Open the page in Safari.
-2. If desired, add to Home Screen and open the installed Web App.
-3. Click Speichern.
-4. Read the diagnostic result if Safari has no file picker.
+Po opublikowaniu:
+1. Otwórz adres w Safari na iPadzie.
+2. Naciśnij Udostępnij.
+3. Wybierz „Dodaj do ekranu początkowego”.
+4. Uruchamiaj Service Bericht z ikony.
+
+Lista firm i formularz są już w paczce.
