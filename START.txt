@@ -1,12 +1,11 @@
 Servicebericht – Projektbasis
 
-V27.6.46:
-- Der aktuelle Bericht wird unmittelbar vor PDF-Erstellung als exakter
-  Formularzustand markiert.
-- Bei Safari/iPadOS pageshow wird nur dieser ausdrücklich markierte Zustand
-  wiederhergestellt.
-- Die PDF-Erstellung hat keinen zweiten, konkurrierenden Auto-Speicher-Handler
-  mehr.
-- Der zusätzliche kombinierte PDF-Speicher-Listener wurde entfernt.
-- Gespeicherte Berichte, Kundenliste und die bestehende Speichern/Öffnen-Logik
-  bleiben erhalten.
+V27.6.47:
+- Alte experimentelle PDF-Rückkehr/AUTOSAVE-Handler entfernt.
+- Nur noch EIN zentraler Active-Report-Schutz.
+- Snapshot bei jeder Eingabe/Änderung.
+- Snapshot unmittelbar vor PDF-Erstellung (Capture-Phase).
+- Snapshot bei pagehide/beforeunload.
+- Wiederherstellung bei pageshow, focus und visibilitychange.
+- Doppelte PDF-Speicher-Listener entfernt.
+- Gespeicherte Berichte bleiben separat.
