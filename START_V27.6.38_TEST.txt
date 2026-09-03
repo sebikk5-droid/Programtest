@@ -1,0 +1,8 @@
+V27.6.38 – TECHNIKER / KUNDE LEER
+
+Ausgangspunkt: V27.6.37.
+Änderung:
+- Feld „Techniker“ startet leer.
+- Feld „Name Kunde“ startet leer.
+- Keine Änderung an Speichern/Öffnen der Historie.
+- Keine Änderung an companies.json, Leer.pdf oder übriger Projektlogik.
