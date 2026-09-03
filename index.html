@@ -293,7 +293,6 @@ $("addDay").onclick=()=>{
   if(visibleDays>=6)return;
   const d=document.querySelectorAll('[data-daybox]').length+1;
   $("addDay").insertAdjacentHTML("beforebegin",dayTemplate(d));
-  applyCustomerRouteDay(visibleDays);
   initQuarterTimeSelects($("times"));
   const box=document.querySelector(`[data-daybox="${d}"]`);
   if(box)box.setAttribute("data-day-active","1"); 
@@ -301,18 +300,7 @@ $("addDay").onclick=()=>{
    if(newDayDate && !newDayDate.value) newDayDate.value=isoAddDays($("date")?.value||"",d-1);
   visibleDays=d;
   bindTimeInputs();
-
-  // Same automatic customer data as day 1.
-  const r=customerRoute();
-  const kmOut=box?.querySelector(`[data-k="Kilometer${d*2-1}"]`);
-  const kmBack=box?.querySelector(`[data-k="Kilometer${d*2}"]`);
-  const pause=box?.querySelector(`[data-k="PauseRZ${d*2}"]`);
-  if(r.km){
-    if(kmOut)kmOut.value=r.km;
-    if(kmBack)kmBack.value=r.km;
-  }
-  if(pause && pause.value==="")pause.value="0";
-
+  applyCustomerRouteDay(d);
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
 };
@@ -556,6 +544,10 @@ function applyCustomerRouteDay(d){
   const b2=document.querySelector(`[data-k="RZende${2*d}"]`);
   const pauseR=document.querySelector(`[data-k="PauseRZ${2*d}"]`);
 
+  if(d>1 && a1 && a2 && !a1.value && !a2.value){
+    const prev=document.querySelector(`[data-k="RZende${2*d-3}"]`);
+    if(prev && prev.value) a1.value=prev.value;
+  }
   if(r.minutes){
     const outOverride=document.querySelector('[data-route-override="out"]');
     const backOverride=document.querySelector('[data-route-override="back"]');
@@ -602,15 +594,7 @@ fetch("companies.json").then(r=>{
     if($("street")) $("street").value=a[0]||"";
     if($("city")) $("city").value=a[1]||"";
     applyCustomerRouteDay1();
-    for(let d=2;d<=visibleDays;d++){
-      const box=document.querySelector(`[data-daybox="${d}"]`);
-      const a=box?.querySelector(`[data-k="Kilometer${d*2-1}"]`);
-      const b=box?.querySelector(`[data-k="Kilometer${d*2}"]`);
-      const p=box?.querySelector(`[data-k="PauseRZ${d*2}"]`);
-      const r=customerRoute();
-      if(r.km){if(a)a.value=r.km;if(b)b.value=r.km;}
-      if(p)p.value="45";
-    }
+    for(let d=2;d<=visibleDays;d++) applyCustomerRouteDay(d);
     recalcTimes();
   };
   // If Safari recreated the document and the form is genuinely empty,
