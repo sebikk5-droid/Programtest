@@ -858,7 +858,9 @@ set(form,"Steuerung",$("control").value);set(form,"NC Version",$("nc").value);se
 set(form,"Störung",$("fault").value);set(form,"Betriebsstunden",$("hours").value);set(form,"Auftrags-Nr",$("order").value);
 set(form,"Name Servicetechniker",$("tech").value);set(form,"Datum Unterschrift",$("signdate").value.split("-").reverse().join("."));
 set(form,"Name Unterschrift Kunde",$("customersign").value);
-let r=ls($("remarks").value);for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,r[i-1]||"");
+// Bemerkungen werden nach dem Flatten direkt auf die PDF-Seite gezeichnet.
+const remarkLines=ls($("remarks").value||"");
+for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,"");
 let p=ls($("parts").value);for(let i=1;i<=4;i++)set(form,"Ersatzteile "+i,p[i-1]||"");
 let km=0, travel=0, work=0;
 for(let d=1;d<=visibleDays;d++){
@@ -897,7 +899,33 @@ for(let d=1;d<=visibleDays;d++){
     page.drawText("X",{x:overnightX,y:y-3,size:9});
   }
 }
-form.updateFieldAppearances();form.flatten();let out=await pdf.save();
+form.updateFieldAppearances();
+form.flatten();
+
+// Bemerkungen erst NACH dem Flatten zeichnen. Dadurch kann keine leere
+// Formular-Appearance die Einträge mehr überdecken.
+try{
+  const page=pdf.getPages()[0];
+  const rects=[
+    [118.826,582.546,555.468,597.636],
+    [67.701,563.990,556.100,581.470],
+    [67.701,546.664,556.055,564.100],
+    [67.7008,529.659,555.779,547.094],
+    [67.7008,512.653,555.591,530.044],
+    [67.7008,495.648,555.547,512.752],
+    [67.7008,478.642,555.403,496.122]
+  ];
+  const font=await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
+  for(let i=0;i<Math.min(remarkLines.length,rects.length);i++){
+    const [x0,y0,x1,y1]=rects[i];
+    let txt=remarkLines[i]||"";
+    const maxChars=Math.max(10,Math.floor((x1-x0)/4.8));
+    if(txt.length>maxChars) txt=txt.slice(0,maxChars-1)+"…";
+    page.drawText(txt,{x:x0+2,y:y0+3,size:9,font});
+  }
+}catch(e){ console.warn("Bemerkungen:",e); }
+
+let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("share").disabled=false;
 $("status").textContent="Fertig – das PDF ist vorbereitet. Klicken Sie auf „📎 PDF teilen“ zum Teilen.";
