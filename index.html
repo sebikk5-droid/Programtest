@@ -312,25 +312,6 @@ $("addDay").onclick=()=>{
   }
   if(pause && pause.value==="")pause.value="0";
 
-  // Initialize the new day's travel pairs exactly like Tag 1:
-  // customer-route minutes are the default, manual override stays editable.
-  if(r.minutes && box){
-    const a1=box.querySelector(`[data-k="RZstart${d*2-1}"]`);
-    const a2=box.querySelector(`[data-k="RZende${d*2-1}"]`);
-    const b1=box.querySelector(`[data-k="RZstart${d*2}"]`);
-    const b2=box.querySelector(`[data-k="RZende${d*2}"]`);
-    if(a1&&a2 && !a1.value && !a2.value){
-      const base1=document.querySelector('[data-k="RZstart1"]')?.value || "07:00";
-      a1.value=base1;
-      a2.value=addMinutesToTime(a1.value,r.minutes);
-    }
-    if(b1&&b2 && !b1.value && !b2.value){
-      const base2=document.querySelector('[data-k="RZende2"]')?.value || "17:00";
-      b2.value=base2;
-      b1.value=addMinutesToTime(b2.value,-(r.minutes+(pauseMinutes(pause?.value||"0"))));
-    }
-  }
-
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
 };
@@ -346,7 +327,7 @@ document.getElementById("times").addEventListener("change",function(e){
   const row=parseInt(m[2],10);
   const d=Math.ceil(row/2);
   const outRow=d*2-1, backRow=d*2;
-  const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
+  const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
   const r=customerRoute();
   if(!r.minutes) return;
 
@@ -623,9 +604,8 @@ function recalcTimes(){
   let travel=0,work=0,km=0;
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
-    const q=k=>box?.querySelector(`[data-k="${k}"]`)||{value:""};
-
     const box=document.querySelector(`[data-daybox="${d}"]`);
+    const q=k=>box?.querySelector(`[data-k="${k}"]`)||{value:""};
     const overrideOut=box?.querySelector('[data-route-override="out"]');
     const overrideBack=box?.querySelector('[data-route-override="back"]');
     const routeBase=customerRoute();
@@ -634,17 +614,9 @@ function recalcTimes(){
     const backMinutes=(overrideBack && overrideBack.value!=="")
       ? Math.max(0,parseInt(overrideBack.value,10)||0) : routeBase.minutes;
 
-    // Netto-Reisezeit uses the customer's base time, unless the user
-    // explicitly entered "Reisezeit ändern" for this day.
-    const pauseOut=pauseMinutes(q(`PauseRZ${a}`).value||"0");
-    const pauseBack=pauseMinutes(q(`PauseRZ${b}`).value||"0");
-    const actualOut=(overrideOut && overrideOut.value!=="")
-      ? Math.max(0,parseInt(overrideOut.value,10)||0) : minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value);
-    const actualBack=(overrideBack && overrideBack.value!=="")
-      ? Math.max(0,parseInt(overrideBack.value,10)||0) : minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value);
-    const rt=Math.max(0,actualOut-pauseOut);
+    const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value));
     const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
-    const rr=Math.max(0,actualBack-pauseBack);
+    const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value));
     travel+=rt+rr; work+=wt;
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
