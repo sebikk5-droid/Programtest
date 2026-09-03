@@ -1177,16 +1177,26 @@ $("share").onclick=async()=>{
 
         // If a single report was opened, select and load exactly that report.
         if(payload?.bericht && typeof payload.bericht==="object"){
-          const idx=list.length-1;
-          const sel=document.getElementById("historySelect");
-          if(sel){
-            sel.value=String(idx);
+          // Select the exact imported report, including when it already
+          // existed in the local history. Do not assume it is the last item.
+          const imported=payload.bericht;
+          const importedIndex=list.findIndex(x =>
+            x && (
+              (imported.id && x.id===imported.id) ||
+              (x.name===imported.name && x.savedAt===imported.savedAt)
+            )
+          );
+          const idx=importedIndex>=0 ? importedIndex : list.length-1;
+
+          const historySelect=document.getElementById("historySelect");
+          if(historySelect){
+            historySelect.value=String(idx);
             const item=list[idx];
             const data=historyItemData(item);
             if(data) applyForm(data);
             if(typeof recalcTimes==="function") recalcTimes();
             refresh();
-            sel.value=String(idx);
+            historySelect.value=String(idx);
           }
           $("status").textContent="Bericht wurde geöffnet.";
         }
