@@ -1158,16 +1158,64 @@ $("share").onclick=async()=>{
         if(!text) return;
 
         const payload=JSON.parse(text);
-        const list=Array.isArray(payload) ? payload : payload?.history;
-        if(!Array.isArray(list)) throw new Error("Keine gültige Bericht-Historie gefunden.");
 
-        saveHistory(list);
-        refresh();
+        // Current format: exactly one Bericht in payload.bericht.
+        // Older files containing a complete history list remain supported.
+        let importedList=null;
+        let importedItem=null;
+
+        if(payload && payload.format==="Servicebericht-Historie" && payload.bericht){
+          importedItem=payload.bericht;
+          importedList=[importedItem];
+        }else if(Array.isArray(payload)){
+          importedList=payload;
+          importedItem=payload.length===1 ? payload[0] : null;
+        }else if(Array.isArray(payload?.history)){
+          importedList=payload.history;
+          importedItem=payload.history.length===1 ? payload.history[0] : null;
+        }
+
+        if(!importedList || !importedList.length)
+          throw new Error("Keine gültige Bericht-Historie gefunden.");
+
+        // Import only what is actually inside the selected file.
+        // A current one-report file therefore adds only that one report.
+        const existing=loadHistory();
+        if(importedList.length===1){
+          const item=importedList[0];
+          const same=existing.findIndex(x =>
+            x && item && x.savedAt===item.savedAt && x.name===item.name
+          );
+          if(same>=0) existing[same]=item;
+          else existing.push(item);
+          saveHistory(existing);
+          refresh();
+
+          const idx=existing.findIndex(x =>
+            x && item && x.savedAt===item.savedAt && x.name===item.name
+          );
+          if(idx>=0 && sel){
+            sel.value=String(idx);
+            const data=historyItemData(existing[idx]);
+            if(data){
+              applyForm(data);
+              if(typeof recalcTimes==="function") recalcTimes();
+              refresh();
+              sel.value=String(idx);
+            }
+          }
+        }else{
+          // Backward-compatible import of an old multi-report history file.
+          saveHistory(importedList);
+          refresh();
+        }
+
+        $("status").textContent="Bericht wurde geöffnet.";
       }catch(e){
         if(e?.name!=="AbortError")
           alert("Historie konnte nicht geöffnet werden: "+(e?.message||e));
       }
-    });
+    });;
   });
 })();
 </script>
