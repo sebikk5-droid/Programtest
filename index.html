@@ -66,7 +66,6 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .choice-group .check{display:inline-flex;align-items:center;gap:8px;margin:6px 14px 6px 0;font-weight:600}
 .choice-group input[type=checkbox]{width:22px;height:22px;min-height:22px}
 
-
 .day-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
 .day-header h3{margin:0}
 .day-actions{display:flex;gap:6px;flex-wrap:wrap}
@@ -179,7 +178,6 @@ document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   el.addEventListener("input",()=>{try{localStorage.setItem(k,el.value);}catch(e){}});
 });
 
-
 // Auswahl bleibt auf diesem Gerät gespeichert.
 document.querySelectorAll('#choices input').forEach(el=>{
   const k='choice_'+(el.id||el.name+'_'+el.value);
@@ -196,46 +194,6 @@ const $=id=>document.getElementById(id); let companies=[];
 // Save the exact live report immediately before PDF generation.
 // Restore it only after a real page reload/recreation AND only if the
 // form is empty. This never overwrites a live Safari-restored report.
-const PDF_RETURN_KEY="servicebericht_pdf_return_v65";
-
-function savePdfReturnState(){
-  try{
-    if(typeof currentHistoryItem==="function"){
-      sessionStorage.setItem(PDF_RETURN_KEY,JSON.stringify(currentHistoryItem()));
-    }
-  }catch(e){}
-}
-
-function clearPdfReturnState(){
-  try{sessionStorage.removeItem(PDF_RETURN_KEY);}catch(e){}
-}
-
-function formIsEmptyForReturn(){
-  const company=document.getElementById("company");
-  if(company && String(company.value||"").trim()!=="") return false;
-  for(const el of document.querySelectorAll("input,textarea,select")){
-    if(el.id==="company") continue;
-    if(el.type==="checkbox" || el.type==="radio"){
-      if(el.checked) return false;
-    }else if(String(el.value||"").trim()!=="") return false;
-  }
-  return true;
-}
-
-function restorePdfReturnStateAfterLoad(){
-  try{
-    if(!formIsEmptyForReturn()) return;
-    const raw=sessionStorage.getItem(PDF_RETURN_KEY);
-    if(!raw) return;
-    const item=JSON.parse(raw);
-    const data=typeof historyItemData==="function" ? historyItemData(item) : null;
-    if(!data) return;
-    applyForm(data);
-    if(typeof recalcTimes==="function") recalcTimes();
-    if(typeof refresh==="function") refresh();
-    clearPdfReturnState();
-  }catch(e){console.warn("PDF return restore:",e);}
-}
 
 const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signdate").value=today;
 
@@ -592,7 +550,6 @@ fetch("companies.json").then(r=>{
     // V27.6.51 FIX: after returning from a PDF, the previous report is kept
     // in sessionStorage for Safari. Choosing another company must invalidate
     // that old snapshot, otherwise pageshow can restore the previous company.
-    try{ sessionStorage.removeItem(PDF_RETURN_KEY); }catch(e){}
 
     const c=companies[+$("company").value];
     if(!c)return;
@@ -613,12 +570,11 @@ fetch("companies.json").then(r=>{
   };
   // If Safari recreated the document and the form is genuinely empty,
   // restore the report captured immediately before PDF generation.
-  setTimeout(restorePdfReturnStateAfterLoad,0);
+
 }).catch(err=>{
   console.error("companies.json:",err);
   $("company").innerHTML='<option value="">Fehler beim Laden der Firmen</option>';
 });
-
 
 function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
 function ls(t){return t.split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean)}
@@ -1353,7 +1309,6 @@ $("share").onclick=async()=>{
 })();
 </script>
 
-
 <script>
 (function(){
   function setupSaveAsPdf(){
@@ -1425,8 +1380,6 @@ $("share").onclick=async()=>{
     setupSaveAsPdf();
 })();
 </script>
-
-
 
 <script>
 (function(){

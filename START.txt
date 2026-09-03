@@ -13,3 +13,5 @@ V27.6.63: continuous live-form session persistence; pageshow restores only if DO
 V27.6.65: clean PDF return snapshot. Snapshot only at PDF generation; restore only after companies.json loads and only if the form is empty; no pageshow restoration; changing company invalidates old snapshot. PDF/Bemerkung generation logic unchanged.
 
 V27.6.66: fixed PDF button ReferenceError by removing orphaned savePdfReturnState/saveCurrentPdfReturnState calls. PDF generator logic unchanged.
+
+V27.6.67: cleaned obsolete PDF-return/sessionStorage restoration mechanism identified in V27.6.66 audit. Normal Bericht history and PDF generation retained unchanged. Backup: BACKUP_V27.6.66.zip.
