@@ -15,3 +15,9 @@ V27.6.65: clean PDF return snapshot. Snapshot only at PDF generation; restore on
 V27.6.66: fixed PDF button ReferenceError by removing orphaned savePdfReturnState/saveCurrentPdfReturnState calls. PDF generator logic unchanged.
 
 V27.6.67: cleaned obsolete PDF-return/sessionStorage restoration mechanism identified in V27.6.66 audit. Normal Bericht history and PDF generation retained unchanged. Backup: BACKUP_V27.6.66.zip.
+
+V27.6.68: removed duplicate PDF click handler installCombined(). The original generator is the only handler. Prepared as clean base for future client signature / signature-area support; PDF field layout and data mapping unchanged. Backup: BACKUP_V27.6.67.zip.
+
+V27.6.69: stable continuation of 68. Single PDF path retained; no signature fields added yet. Backup: BACKUP_V27.6.68.zip.
+
+V27.6.70: stale-PDF guard. At start of PDF generation lastPdfBlob is invalidated and Share disabled; Share is re-enabled only after the newly generated PDF is saved. Backup: BACKUP_V27.6.69.zip.

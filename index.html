@@ -81,6 +81,9 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .day-collapsed .day-body,
 .day-collapsed .day-fields{display:none!important}
 </style>
+<!-- V27.6.68: PDF is handled by the original generator only; no second click listener. -->
+<!-- V27.6.69: PDF generation remains single-path; lastPdfBlob is produced by the main generator only. Signature area can be added later. -->
+<!-- V27.6.70: invalidate lastPdfBlob at the start of generation; Share is disabled until the new PDF is actually saved. -->
 </head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
@@ -778,6 +781,8 @@ recalcTimes();
 
   $("generate").onclick=async()=>{
 $("status").textContent="PDF wird erstellt…";
+lastPdfBlob=null;
+$("share").disabled=true;
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
 let c=companies[+$("company").value];
@@ -1381,52 +1386,6 @@ $("share").onclick=async()=>{
 })();
 </script>
 
-<script>
-(function(){
-  function installCombined(){
-    const btn=document.getElementById("generate");
-    if(!btn || btn.dataset.combinedInstalled==="1") return;
-    btn.dataset.combinedInstalled="1";
 
-    btn.addEventListener("click",function(){
-      let tries=0;
-      const finish=async()=>{
-        if(typeof lastPdfBlob!=="undefined" && lastPdfBlob){
-          const filename="Service-Bericht.pdf";
-          try{
-            if(window.showSaveFilePicker){
-              const handle=await window.showSaveFilePicker({
-                suggestedName:filename,
-                types:[{description:"PDF-Datei",accept:{"application/pdf":[".pdf"]}}]
-              });
-              const w=await handle.createWritable();
-              await w.write(lastPdfBlob);
-              await w.close();
-              const s=document.getElementById("status");
-              if(s) s.textContent="PDF wurde gespeichert.";
-              return;
-            }
-          }catch(e){
-            if(e && e.name==="AbortError") return;
-          }
-          const url=URL.createObjectURL(lastPdfBlob);
-          const a=document.createElement("a");
-          a.href=url; a.download=filename; a.style.display="none";
-          document.body.appendChild(a); a.click(); a.remove();
-          setTimeout(()=>URL.revokeObjectURL(url),5000);
-          const s=document.getElementById("status");
-          if(s) s.textContent="PDF zum Speichern geöffnet.";
-          return;
-        }
-        if(++tries<150) setTimeout(finish,100);
-      };
-      setTimeout(finish,150);
-    });
-  }
-  if(document.readyState==="loading")
-    document.addEventListener("DOMContentLoaded",installCombined);
-  else installCombined();
-})();
-</script>
 </body>
 </html>
