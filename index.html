@@ -858,7 +858,8 @@ set(form,"Steuerung",$("control").value);set(form,"NC Version",$("nc").value);se
 set(form,"Störung",$("fault").value);set(form,"Betriebsstunden",$("hours").value);set(form,"Auftrags-Nr",$("order").value);
 set(form,"Name Servicetechniker",$("tech").value);set(form,"Datum Unterschrift",$("signdate").value.split("-").reverse().join("."));
 set(form,"Name Unterschrift Kunde",$("customersign").value);
-let r=ls($("remarks").value);for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,r[i-1]||"");
+const r=ls($("remarks").value||"");
+for(let i=1;i<=7;i++) set(form,"Bemerkung"+i,(r[i-1]||"").trim());
 let p=ls($("parts").value);for(let i=1;i<=4;i++)set(form,"Ersatzteile "+i,p[i-1]||"");
 let km=0, travel=0, work=0;
 for(let d=1;d<=visibleDays;d++){
@@ -897,6 +898,11 @@ for(let d=1;d<=visibleDays;d++){
     page.drawText("X",{x:overnightX,y:y-3,size:9});
   }
 }
+// Finalny zapis Bemerkungen – dokładnie te same linie co w aplikacji.
+try{
+  const finalRemarks=ls($("remarks")?.value||"");
+  for(let i=1;i<=7;i++) set(form,"Bemerkung"+i,(finalRemarks[i-1]||"").trim());
+}catch(e){ console.warn("Bemerkungen:",e); }
 form.updateFieldAppearances();form.flatten();let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("share").disabled=false;
