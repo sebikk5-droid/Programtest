@@ -7,3 +7,5 @@ Date fix:
 - no changes to filename/folder/history logic
 
 V27.6.51 – poprawka: daty dla wierszy Reise-/Arbeitszeit są pobierane z daty Tag; jeśli Tag nie ma daty, automatycznie z Einsatzdatum + numer dnia. Data trafia do obu wierszy danego dnia.
+
+V27.6.52 – Bemerkungen: finalne ponowne wpisanie linii Bemerkungen do Bemerkung1..7 tuż przed updateFieldAppearances/flatten/save.
