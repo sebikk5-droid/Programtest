@@ -302,6 +302,7 @@ $("addDay").onclick=()=>{
   bindTimeInputs();
   applyCustomerRouteDay(d);
   bindTimeInputs();
+  recalcDayNet(d);
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
 };
@@ -593,7 +594,10 @@ fetch("companies.json").then(r=>{
     if($("street")) $("street").value=a[0]||"";
     if($("city")) $("city").value=a[1]||"";
     applyCustomerRouteDay1();
-    for(let d=2;d<=visibleDays;d++) applyCustomerRouteDay(d);
+    for(let d=2;d<=visibleDays;d++) {
+      applyCustomerRouteDay(d);
+      recalcDayNet(d);
+    }
     recalcTimes();
   };
   // If Safari recreated the document and the form is genuinely empty,
@@ -628,12 +632,42 @@ function getActiveDays(){
     .filter(Number.isFinite)
     .sort((a,b)=>a-b);
 }
+function recalcDayNet(d){
+  const box=document.querySelector(`[data-daybox="${d}"]`);
+  if(!box) return;
+  const rowOut=d*2-1, rowBack=d*2;
+  const get=k=>box.querySelector(`[data-k="${k}"]`);
+  const getCalc=k=>box.querySelector(`[data-calc="${k}"]`);
+  const r=customerRoute();
+
+  const ov=getCalc(`rt${d}`), rv=getCalc(`rr${d}`);
+  const oo=box.querySelector('[data-route-override="out"]');
+  const bo=box.querySelector('[data-route-override="back"]');
+  const po=get(`PauseRZ${rowOut}`), pb=get(`PauseRZ${rowBack}`);
+
+  const outManual=oo && String(oo.value).trim()!=="" ? Math.max(0,parseInt(oo.value,10)||0) : null;
+  const backManual=bo && String(bo.value).trim()!=="" ? Math.max(0,parseInt(bo.value,10)||0) : null;
+  const outPause=pauseMinutes(po?.value||"0");
+  const backPause=pauseMinutes(pb?.value||"0");
+
+  let out=minutesBetween(get(`RZstart${rowOut}`)?.value,get(`RZende${rowOut}`)?.value);
+  let back=minutesBetween(get(`RZstart${rowBack}`)?.value,get(`RZende${rowBack}`)?.value);
+
+  if(outManual!==null) out=outManual;
+  else if(!out && r.minutes) out=r.minutes;
+  if(backManual!==null) back=backManual;
+  else if(!back && r.minutes) back=r.minutes;
+
+  if(ov) ov.value=fmtMin(Math.max(0,out-outPause));
+  if(rv) rv.value=fmtMin(Math.max(0,back-backPause));
+}
 function recalcTimes(){
   let travel=0,work=0,km=0;
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
     const box=document.querySelector(`[data-daybox="${d}"]`);
     if(!box) continue;
+    recalcDayNet(d);
     const q=k=>box.querySelector(`[data-k="${k}"]`)||{value:""};
     const calc=k=>box.querySelector(`[data-calc="${k}"]`);
     const overrideOut=box.querySelector('[data-route-override="out"]');
@@ -721,7 +755,9 @@ function bindTimeInputs(){
           const azEnd=field("AZende",outRow);
           if(azEnd&&b1?.value&&azEnd.dataset.manual!=="1")azEnd.value=b1.value;
         }
-        recalcTimes(); return;
+        recalcDayNet(d);
+        recalcTimes();
+        return;
       }
 
       // EXACTLY the day-1 travel pair logic, for any day.
