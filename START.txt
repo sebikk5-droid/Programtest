@@ -1,9 +1,7 @@
 Servicebericht – Projektbasis
 
-V27.6.44:
-- Robuster lokaler Entwurf für den aktuell bearbeiteten Bericht.
-- Jede Eingabe wird lokal gespeichert.
-- Vor PDF-Erstellung wird der aktuelle Stand nochmals gesichert.
-- Nach Rückkehr/Neuladen durch Safari/iPadOS wird der Entwurf wiederhergestellt.
-- „Zurücksetzen“ löscht den Entwurf.
-- Gespeicherte Berichte, PDF, Kundenliste und Speichern/Öffnen bleiben erhalten.
+V27.6.45:
+- Der aktuelle Formularzustand wird direkt vor PDF-Erstellung gesichert.
+- Nach PDF-Erstellung wird derselbe Formularzustand sofort wiederhergestellt.
+- Bei Safari/iPadOS pageshow wird zuerst der exakte Zustand von vor PDF geladen.
+- Auch bei PDF-Fehlern bleibt der aktuelle Bericht erhalten.
