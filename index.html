@@ -1022,20 +1022,42 @@ $("share").onclick=async()=>{
         },null,2)],{type:"application/json"});
 
         if(window.showSaveFilePicker){
-          const handle=await window.showSaveFilePicker({
-            suggestedName:suggested,
-            types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
-          });
-          const w=await handle.createWritable();
-          await w.write(blob);
-          await w.close();
-        }else{
-          const a=document.createElement("a");
-          a.href=URL.createObjectURL(blob);
-          a.download=suggested;
-          document.body.appendChild(a); a.click(); a.remove();
-          setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+          try{
+            const handle=await window.showSaveFilePicker({
+              suggestedName:suggested,
+              types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
+            });
+            const w=await handle.createWritable();
+            await w.write(blob);
+            await w.close();
+            return;
+          }catch(e){
+            if(e?.name==="AbortError") return;
+          }
         }
+
+        const file=new File([blob],suggested,{type:"application/json"});
+        if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+          try{
+            await navigator.share({
+              files:[file],
+              title:"Servicebericht Historie",
+              text:"Historie speichern"
+            });
+            return;
+          }catch(e){
+            if(e?.name==="AbortError") return;
+          }
+        }
+
+        const a=document.createElement("a");
+        a.href=URL.createObjectURL(blob);
+        a.download=suggested;
+        a.target="_blank";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=>URL.revokeObjectURL(a.href),3000);
       }catch(e){
         if(e?.name!=="AbortError")
           alert("Historie konnte nicht gespeichert werden: "+(e?.message||e));
