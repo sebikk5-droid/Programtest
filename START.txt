@@ -10,4 +10,4 @@ V27.6.51 – poprawka: daty dla wierszy Reise-/Arbeitszeit są pobierane z daty 
 
 V27.6.63: continuous live-form session persistence; pageshow restores only if DOM is empty; no stale first-report overwrite; Bemerkungen unchanged from V27.6.57.
 
-V27.6.64: PWA cache fix. Added registered SW with versioned cache, network-first navigation/index.html, old-cache cleanup and updateViaCache:none. Application/PDF logic unchanged from V27.6.63.
+V27.6.65: clean PDF return snapshot. Snapshot only at PDF generation; restore only after companies.json loads and only if the form is empty; no pageshow restoration; changing company invalidates old snapshot. PDF/Bemerkung generation logic unchanged.

@@ -192,52 +192,51 @@ document.querySelectorAll('#choices input').forEach(el=>{
 <script>
 const $=id=>document.getElementById(id); let companies=[];
 
-// V27.6.41: keep the currently edited Bericht visible after the PDF
-// save/share round-trip, which can cause Safari to restore/reload the page.
-const PDF_RETURN_KEY="servicebericht_pdf_return_v2";
-function saveCurrentPdfReturnState(){
+// V27.6.65 — PDF return state
+// Save the exact live report immediately before PDF generation.
+// Restore it only after a real page reload/recreation AND only if the
+// form is empty. This never overwrites a live Safari-restored report.
+const PDF_RETURN_KEY="servicebericht_pdf_return_v65";
+
+function savePdfReturnState(){
   try{
     if(typeof currentHistoryItem==="function"){
       sessionStorage.setItem(PDF_RETURN_KEY,JSON.stringify(currentHistoryItem()));
     }
   }catch(e){}
 }
-function restoreCurrentPdfReturnState(){
-  try{
-    const raw=sessionStorage.getItem(PDF_RETURN_KEY);
-    if(!raw) return false;
-    const item=JSON.parse(raw);
-    if(!item || typeof item!=="object") return false;
-    const data=typeof historyItemData==="function" ? historyItemData(item) : null;
-    if(data && typeof applyForm==="function"){
-      applyForm(data);
-      if(typeof recalcTimes==="function") recalcTimes();
-      if(typeof refresh==="function") refresh();
-      return true;
-    }
-  }catch(e){}
-  return false;
-}
-window.addEventListener("pageshow",function(){
-  if(restoreCurrentPdfReturnState()){
-    try{ sessionStorage.removeItem(PDF_RETURN_KEY); }catch(e){}
-  }
-});
 
-// V27.6.39: Safari/iPadOS can restore/autofill stale numeric values into
-// these two free-text fields when returning from PDF/share. They must
-// start empty for a new report. Only pure numeric values are cleared;
-// real technician/customer names are never touched.
-function clearUnexpectedNumericSignFields(){
-  ["tech","customersign"].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el && /^\s*\d+(?:[.,]\d+)?\s*$/.test(el.value||"")) el.value="";
-  });
+function clearPdfReturnState(){
+  try{sessionStorage.removeItem(PDF_RETURN_KEY);}catch(e){}
 }
-clearUnexpectedNumericSignFields();
-window.addEventListener("pageshow",function(){
-  clearUnexpectedNumericSignFields();
-});
+
+function formIsEmptyForReturn(){
+  const company=document.getElementById("company");
+  if(company && String(company.value||"").trim()!=="") return false;
+  for(const el of document.querySelectorAll("input,textarea,select")){
+    if(el.id==="company") continue;
+    if(el.type==="checkbox" || el.type==="radio"){
+      if(el.checked) return false;
+    }else if(String(el.value||"").trim()!=="") return false;
+  }
+  return true;
+}
+
+function restorePdfReturnStateAfterLoad(){
+  try{
+    if(!formIsEmptyForReturn()) return;
+    const raw=sessionStorage.getItem(PDF_RETURN_KEY);
+    if(!raw) return;
+    const item=JSON.parse(raw);
+    const data=typeof historyItemData==="function" ? historyItemData(item) : null;
+    if(!data) return;
+    applyForm(data);
+    if(typeof recalcTimes==="function") recalcTimes();
+    if(typeof refresh==="function") refresh();
+    clearPdfReturnState();
+  }catch(e){console.warn("PDF return restore:",e);}
+}
+
 const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signdate").value=today;
 
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
@@ -612,6 +611,9 @@ fetch("companies.json").then(r=>{
     }
     recalcTimes();
   };
+  // If Safari recreated the document and the form is genuinely empty,
+  // restore the report captured immediately before PDF generation.
+  setTimeout(restorePdfReturnStateAfterLoad,0);
 }).catch(err=>{
   console.error("companies.json:",err);
   $("company").innerHTML='<option value="">Fehler beim Laden der Firmen</option>';
@@ -821,6 +823,7 @@ recalcTimes();
 saveCurrentPdfReturnState();
 
   $("generate").onclick=async()=>{
+  savePdfReturnState();
 $("status").textContent="PDF wird erstellt…";
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
@@ -1475,18 +1478,5 @@ $("share").onclick=async()=>{
   else installCombined();
 })();
 </script>
-
-<script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function () {
-    navigator.serviceWorker.register("./sw.js", {updateViaCache:"none"}).then(function(reg){
-      reg.update();
-    }).catch(function(err){
-      console.warn("Service Worker:", err);
-    });
-  });
-}
-</script>
-
 </body>
 </html>
