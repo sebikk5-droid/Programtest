@@ -7,5 +7,3 @@ Date fix:
 - no changes to filename/folder/history logic
 
 V27.6.51 – poprawka: daty dla wierszy Reise-/Arbeitszeit są pobierane z daty Tag; jeśli Tag nie ma daty, automatycznie z Einsatzdatum + numer dnia. Data trafia do obu wierszy danego dnia.
-
-V27.6.56: Bemerkungen rendered below the static PDF heading, aligned to the lower remark lines. Original V27.6.51 base retained.
