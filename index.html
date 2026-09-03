@@ -634,66 +634,36 @@ function recalcTimes(){
     const a=d*2-1,b=d*2;
     const box=document.querySelector(`[data-daybox="${d}"]`);
     if(!box) continue;
-
     const q=k=>box.querySelector(`[data-k="${k}"]`)||{value:""};
     const calc=k=>box.querySelector(`[data-calc="${k}"]`);
     const overrideOut=box.querySelector('[data-route-override="out"]');
     const overrideBack=box.querySelector('[data-route-override="back"]');
-
+    const route=customerRoute();
     const pauseOut=pauseMinutes(q(`PauseRZ${a}`).value||"0");
     const pauseBack=pauseMinutes(q(`PauseRZ${b}`).value||"0");
-
-    const rt=Math.max(0,
-      minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseOut
-    );
-    const wt=Math.max(0,
-      minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-
-      pauseMinutes(q(`PauseAZ${a}`).value||"0")
-    );
-    const rr=Math.max(0,
-      minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack
-    );
-
-    // Reisezeit ändern is a manual replacement for the route duration.
-    // The net display itself remains calculated from the actual RZ fields.
-    const routeBase=customerRoute();
-    const outManual=(overrideOut&&String(overrideOut.value).trim()!=="")
-      ? Math.max(0,parseInt(overrideOut.value,10)||0) : null;
-    const backManual=(overrideBack&&String(overrideBack.value).trim()!=="")
-      ? Math.max(0,parseInt(overrideBack.value,10)||0) : null;
-
-    travel+=rt+rr;
-    work+=wt;
-    km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
-    km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
-
-    const elRt=calc(`rt${d}`);
-    const elWt=calc(`wt${d}`);
-    const elWt2=calc(`wt2${d}`);
-    const elRr=calc(`rr${d}`);
-    const elTotal=calc(`total${d}`);
-
+    const manualOut=overrideOut && String(overrideOut.value).trim()!=="" ? Math.max(0,parseInt(overrideOut.value,10)||0) : null;
+    const manualBack=overrideBack && String(overrideBack.value).trim()!=="" ? Math.max(0,parseInt(overrideBack.value,10)||0) : null;
+    const outClock=minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value);
+    const backClock=minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value);
+    const rtBase=manualOut!==null ? manualOut : (route.minutes||0);
+    const rrBase=manualBack!==null ? manualBack : (route.minutes||0);
+    const rtClock=outClock>0 || (q(`RZstart${a}`).value&&q(`RZende${a}`).value);
+    const rrClock=backClock>0 || (q(`RZstart${b}`).value&&q(`RZende${b}`).value);
+    const rt=Math.max(0,(rtClock?outClock:rtBase)-pauseOut);
+    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value||"0"));
+    const rr=Math.max(0,(rrClock?backClock:rrBase)-pauseBack);
+    const elRt=calc(`rt${d}`),elWt=calc(`wt${d}`),elWt2=calc(`wt2${d}`),elRr=calc(`rr${d}`),elTotal=calc(`total${d}`);
     if(elRt)elRt.value=fmtMin(rt);
     if(elWt)elWt.value=fmtMin(wt);
     if(elWt2)elWt2.value=fmtMin(wt);
     if(elRr)elRr.value=fmtMin(rr);
     if(elTotal)elTotal.value=fmtMin(rt+rr+wt);
-
-    // Keep the fields visually initialized even before the user edits them.
-    if(outManual===null && routeBase.minutes>0 && !q(`RZstart${a}`).value && q(`RZende${a}`).value){
-      q(`RZstart${a}`).value=addMinutesToTime(q(`RZende${a}`).value,-routeBase.minutes);
-    }
-    if(backManual===null && routeBase.minutes>0 && !q(`RZstart${b}`).value && q(`RZende${b}`).value){
-      q(`RZende${b}`).value=addMinutesToTime(q(`RZstart${b}`).value,routeBase.minutes+pauseBack);
-    }
+    travel+=rt+rr; work+=wt;
+    km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
+    km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
   }
-
-  const t=document.querySelector('[data-total="travel"]');
-  const w=document.querySelector('[data-total="work"]');
-  const k=document.querySelector('[data-total="km"]');
-  if(t)t.value=fmtMin(travel);
-  if(w)w.value=fmtMin(work);
-  if(k)k.value=String(Math.round(km*10)/10);
+  const t=document.querySelector('[data-total="travel"]'),w=document.querySelector('[data-total="work"]'),k=document.querySelector('[data-total="km"]');
+  if(t)t.value=fmtMin(travel); if(w)w.value=fmtMin(work); if(k)k.value=String(Math.round(km*10)/10);
 }
 function pdfCheck(form,name,on){
   try{
