@@ -8,8 +8,4 @@ Date fix:
 
 V27.6.51 – poprawka: daty dla wierszy Reise-/Arbeitszeit są pobierane z daty Tag; jeśli Tag nie ma daty, automatycznie z Einsatzdatum + numer dnia. Data trafia do obu wierszy danego dnia.
 
-V27.6.59: PDF return snapshot is armed only on Generate, consumed before restore, and cleared on company change. No startup snapshot.
-
-V27.6.60: confirmed fix: removed load-time saveCurrentPdfReturnState(); live DOM is snapshotted only at Generate; snapshot is consumed before restore; company change cancels it.
-
-V27.6.61: preserve the exact live report on PDF return; snapshot only at Generate; consume once on pageshow; changing company cancels the pending snapshot.
+V27.6.62: preserve live Safari DOM on return; restore session backup only when form is actually empty; snapshot only at Generate; no pageshow clearing of technician/customer fields.
