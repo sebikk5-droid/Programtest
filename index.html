@@ -82,11 +82,6 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .day-collapsed .day-body,
 .day-collapsed .day-fields{display:none!important}
 </style>
-<link rel="manifest" href="./manifest.webmanifest">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Service Bericht">
-<meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
@@ -1011,6 +1006,7 @@ $("share").onclick=async()=>{
 
         if(idx>=0 && list[idx]) list[idx]=item;
         else list.push(item);
+
         saveHistory(list);
         refresh();
         if(sel) sel.value=String(idx>=0 && idx<list.length ? idx : list.length-1);
@@ -1019,24 +1015,42 @@ $("share").onclick=async()=>{
         const pad=n=>String(n).padStart(2,"0");
         const dateToday=`${pad(today.getDate())}.${pad(today.getMonth()+1)}.${today.getFullYear()}`;
         const companyName=(item.name||"Bericht").trim().replace(/[\\/:*?"<>|]/g,"_");
-        const suggestedBase=`${companyName}_${dateToday}.json`;
+        const filename=`${companyName}_${dateToday}.json`;
+
         const json=JSON.stringify({
           format:"Servicebericht-Historie",
           version:1,
           savedAt:new Date().toISOString(),
           bericht:item
         },null,2);
-        const blob=new Blob([json],{type:"application/json"});
 
-        // Chrome/Edge: native Save As remains the preferred path.
+        const file=new File([json],filename,{type:"application/json"});
+
+        // iPad/iPhone Safari: share ONLY the file.
+        // No text, title, or url is supplied, so the Files share sheet
+        // should receive one JSON file only.
+        if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+          try{
+            await navigator.share({files:[file]});
+            $("status").textContent="Historie gespeichert.";
+            return;
+          }catch(e){
+            if(e?.name==="AbortError") return;
+          }
+        }
+
+        // Chrome/Edge/Desktop: native Save As.
         if(window.showSaveFilePicker){
           try{
             const fh=await window.showSaveFilePicker({
-              suggestedName:suggestedBase,
-              types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
+              suggestedName:filename,
+              types:[{
+                description:"Servicebericht Historie",
+                accept:{"application/json":[".json"]}
+              }]
             });
             const w=await fh.createWritable();
-            await w.write(blob);
+            await w.write(file);
             await w.close();
             $("status").textContent="Historie gespeichert.";
             return;
@@ -1045,41 +1059,8 @@ $("share").onclick=async()=>{
           }
         }
 
-        // PWA test: if the browser exposes the File System Access API under
-        // a web-app context, use it. This path is deliberately feature-tested.
-        if(window.isSecureContext && window.showSaveFilePicker){
-          try{
-            const fh=await window.showSaveFilePicker({
-              suggestedName:suggestedBase,
-              types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
-            });
-            const w=await fh.createWritable();
-            await w.write(blob);
-            await w.close();
-            $("status").textContent="Historie gespeichert.";
-            return;
-          }catch(e){
-            if(e?.name==="AbortError") return;
-          }
-        }
-
-        // Safari/PWA diagnostic: do not silently pretend that a folder picker
-        // exists. If unavailable, report the platform capability instead of
-        // producing the old two-item share result.
-        const isIOS =
-          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-          (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
-
-        if(isIOS){
-          alert("TEST: Safari/iPadOS stellt für diese Web-App keinen lokalen „Speichern unter“-Ordner-Picker bereit. PWA-Modus erkannt: "+(window.matchMedia("(display-mode: standalone)").matches?"JA":"NEIN")+".");
-          return;
-        }
-
-        const entered=prompt("Dateiname für den Bericht:",suggestedBase);
-        if(entered===null) return;
-        const cleaned=entered.trim().replace(/[\\/:*?"<>|]/g,"_");
-        const filename=cleaned?(cleaned.endsWith(".json")?cleaned:cleaned+".json"):suggestedBase;
-        const url=URL.createObjectURL(blob);
+        // Final fallback: one file only, no Web Share text item.
+        const url=URL.createObjectURL(file);
         const a=document.createElement("a");
         a.href=url;
         a.download=filename;
@@ -1093,7 +1074,7 @@ $("share").onclick=async()=>{
         if(e?.name!=="AbortError")
           alert("Historie konnte nicht gespeichert werden: "+(e?.message||e));
       }
-    });;;;
+    });;;;;
 
     // Selecting an entry in the existing „Gespeicherte Berichte“ window
     // loads that exact entry. No second history/list is created.
@@ -1369,11 +1350,6 @@ $("share").onclick=async()=>{
     document.addEventListener("DOMContentLoaded",installCombined);
   else installCombined();
 })();
-</script>
-<script>
-if("serviceWorker" in navigator){
-  window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
-}
 </script>
 </body>
 </html>
