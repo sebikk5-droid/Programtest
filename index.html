@@ -291,7 +291,7 @@ initQuarterTimeSelects($("times"));
 document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
 $("addDay").onclick=()=>{
   if(visibleDays>=6)return;
-  const d=document.querySelectorAll('[data-daybox]').length+1;
+  const d=visibleDays+1;
   $("addDay").insertAdjacentHTML("beforebegin",dayTemplate(d));
   initQuarterTimeSelects($("times"));
   const box=document.querySelector(`[data-daybox="${d}"]`);
@@ -327,7 +327,7 @@ document.getElementById("times").addEventListener("change",function(e){
   const row=parseInt(m[2],10);
   const d=Math.ceil(row/2);
   const outRow=d*2-1, backRow=d*2;
-  const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
+  const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
   const r=customerRoute();
   if(!r.minutes) return;
 
@@ -604,7 +604,7 @@ function recalcTimes(){
   let travel=0,work=0,km=0;
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
-    const q=k=>document.querySelector(`[data-k="${k}"]`)||{value:""};
+    const q=k=>box?.querySelector(`[data-k="${k}"]`)||{value:""};
 
     const box=document.querySelector(`[data-daybox="${d}"]`);
     const overrideOut=box?.querySelector('[data-route-override="out"]');
@@ -622,7 +622,7 @@ function recalcTimes(){
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
 
-    const sc=(name,val)=>{const el=document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
+    const sc=(name,val)=>{const el=box?.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
     sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
 
     if(box){
@@ -819,13 +819,10 @@ let r=String($("remarks").value||"").split(/\r?\n/).map(x=>x.trim()).filter(Bool
 for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,r[i-1]||"");
 let p=ls($("parts").value);for(let i=1;i<=4;i++)set(form,"Ersatzteile "+i,p[i-1]||"");
 let km=0, travel=0, work=0;
-const dayBoxes=[...document.querySelectorAll("[data-daybox]")];
-for(let d=1;d<=dayBoxes.length;d++){
-  const box=dayBoxes[d-1];
+for(let d=1;d<=visibleDays;d++){
   const a=(d*2)-1,b=d*2;
-  const q=k=>box.querySelector(`[data-k="${k}"]`) || {value:""};
-  const dateEl=box.querySelector(".daydate");
-  const dateIso=dateEl?.value || isoAddDays($("date")?.value||"",d-1);
+  const q=k=>document.querySelector(`[data-k="${k}"]`) || {value:""};
+  const dateIso=pdfDateFromDay(d);
   const date=dateIso?dateIso.split("-").reverse().join("."):"";
   set(form,`Datum${a}`,date);
   set(form,`Datum${b}`,date);
@@ -849,7 +846,7 @@ set(form,"Gesamtzeit",fmtMin(travel+work));
 // approximately 14.2 pt lower. The overnight column is around x=548 pt.
 const page=pdf.getPages()[0];
 const overnightX=548;
-for(let d=1;d<=dayBoxes.length;d++){
+for(let d=1;d<=visibleDays;d++){
   const cb=document.querySelector(`[data-overnight-day="${d}"]`);
   if(cb && cb.checked){
     const row=(d-1)*2+1;
