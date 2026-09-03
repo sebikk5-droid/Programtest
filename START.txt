@@ -1,10 +1,7 @@
-Servicebericht – Projektbasis
-
-V27.6.49:
-- Naprawiono kluczowy problem zakresu: collectForm/applyForm są prywatne
-  w skrypcie Historie, dlatego mostek jest tworzony dokładnie w tym samym IIFE.
-- Aktualny Bericht jest zapisywany przy każdej zmianie.
-- Stan jest zapisywany bezpośrednio przed PDF.
-- Stan jest odtwarzany po przygotowaniu PDF i po pageshow Safari/iPadOS.
-- Reset usuwa aktywny zapis roboczy.
-- Istniejący mechanizm zapisu PDF pozostawiono bez zmian.
+Servicebericht – V27.6.50
+Date fix:
+- Einsatzdatum -> PDF field „Datum Einsatzbeginn“
+- Tag 1..12 dates -> PDF fields Datum1..Datum12
+- final explicit date pass immediately before PDF serialization
+- updateFieldAppearances() remains before flatten/save
+- no changes to filename/folder/history logic
