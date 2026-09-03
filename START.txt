@@ -9,3 +9,5 @@ Date fix:
 V27.6.51 – poprawka: daty dla wierszy Reise-/Arbeitszeit są pobierane z daty Tag; jeśli Tag nie ma daty, automatycznie z Einsatzdatum + numer dnia. Data trafia do obu wierszy danego dnia.
 
 V27.6.59: PDF return snapshot is armed only on Generate, consumed before restore, and cleared on company change. No startup snapshot.
+
+V27.6.60: confirmed fix: removed load-time saveCurrentPdfReturnState(); live DOM is snapshotted only at Generate; snapshot is consumed before restore; company change cancels it.
