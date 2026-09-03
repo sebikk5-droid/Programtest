@@ -17,3 +17,5 @@ V27.6.66: fixed PDF button ReferenceError by removing orphaned savePdfReturnStat
 V27.6.67: cleaned obsolete PDF-return/sessionStorage restoration mechanism identified in V27.6.66 audit. Normal Bericht history and PDF generation retained unchanged. Backup: BACKUP_V27.6.66.zip.
 
 V27.6.69: date fix. PDF now reads each day's date specifically from .daydate[data-day], with the main date only as fallback. All other V27.6.68 logic unchanged. Backup: BACKUP_V27.6.68_BEFORE_DATE_FIX.zip.
+
+V27.6.70: fixed dates for dynamically reconstructed days and made PDF day-date lookup target the correct day box. Based on V27.6.69. PDF return/state, company selection, Bemerkung and save flow otherwise unchanged. Backup: BACKUP_V27.6.69_BEFORE_DAY_DATE_FIX.zip.
