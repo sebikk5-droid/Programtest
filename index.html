@@ -81,7 +81,6 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .day-collapsed .day-body,
 .day-collapsed .day-fields{display:none!important}
 </style>
-<!-- V27.6.68: kept the required Save-As handler; synchronized it with the async PDF generator to prevent stale lastPdfBlob. -->
 </head>
 <body>
 <header><h1>Service-Bericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
@@ -779,8 +778,6 @@ recalcTimes();
 
   $("generate").onclick=async()=>{
 $("status").textContent="PDF wird erstellt…";
-window.__pdfGenerating=true;
-lastPdfBlob=null;
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
 let c=companies[+$("company").value];
@@ -862,7 +859,6 @@ lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("share").disabled=false;
 $("status").textContent="Fertig – das PDF ist vorbereitet. Klicken Sie auf „📎 PDF teilen“ zum Teilen.";
 }catch(e){$("status").textContent="Fehler: "+e.message}
-finally{window.__pdfGenerating=false}
 };
 $("share").onclick=async()=>{
   if(!lastPdfBlob){$("status").textContent="Najpierw kliknij „PDF erstellen”.";return;}
@@ -1395,10 +1391,6 @@ $("share").onclick=async()=>{
     btn.addEventListener("click",function(){
       let tries=0;
       const finish=async()=>{
-        if(window.__pdfGenerating){
-          if(++tries<300) setTimeout(finish,100);
-          return;
-        }
         if(typeof lastPdfBlob!=="undefined" && lastPdfBlob){
           const filename="Service-Bericht.pdf";
           try{
@@ -1426,9 +1418,9 @@ $("share").onclick=async()=>{
           if(s) s.textContent="PDF zum Speichern geöffnet.";
           return;
         }
-        if(++tries<300) setTimeout(finish,100);
+        if(++tries<150) setTimeout(finish,100);
       };
-      setTimeout(finish,0);
+      setTimeout(finish,150);
     });
   }
   if(document.readyState==="loading")
