@@ -1,0 +1,12 @@
+V27.6.37 – EINZELNEN GESPEICHERTEN BERICHT WIEDER ÖFFNEN
+
+Ausgangspunkt: V27.6.36.
+Änderung: Der Öffnen-Dialog akzeptiert jetzt zusätzlich das neue
+Einzelbericht-Format {format, version, savedAt, bericht}, das beim
+Speichern auf iPad/iPhone erzeugt wird.
+
+Damit kann ein einzeln gespeicherter JSON-Bericht wieder über
+„Öffnen / Bearbeiten“ geladen werden. Eine komplette alte Historie
+als Array bzw. {history:[...]} bleibt ebenfalls kompatibel.
+
+Keine Änderung an companies.json, Leer.pdf oder der übrigen Projektlogik.
