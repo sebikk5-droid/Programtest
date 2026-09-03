@@ -1134,11 +1134,47 @@ $("share").onclick=async()=>{
         if(!text) return;
 
         const payload=JSON.parse(text);
-        const list=Array.isArray(payload) ? payload : payload?.history;
-        if(!Array.isArray(list)) throw new Error("Keine gültige Bericht-Historie gefunden.");
+
+        // V27.6.37:
+        // Speichern exportiert jetzt bewusst EINEN Bericht als
+        // { format, version, savedAt, bericht }. Der Öffnen-Dialog
+        // muss deshalb neben einer kompletten Historie auch diesen
+        // Einzelbericht akzeptieren.
+        let list;
+        if(Array.isArray(payload)){
+          list=payload;
+        }else if(Array.isArray(payload?.history)){
+          list=payload.history;
+        }else if(payload?.bericht && typeof payload.bericht==="object"){
+          list=loadHistory();
+          const imported=payload.bericht;
+          const existingIndex=list.findIndex(x =>
+            x && x.name===imported.name && x.savedAt===imported.savedAt
+          );
+          if(existingIndex>=0) list[existingIndex]=imported;
+          else list.push(imported);
+        }else{
+          throw new Error("Keine gültige Bericht-Historie oder kein gültiger Servicebericht gefunden.");
+        }
 
         saveHistory(list);
         refresh();
+
+        // If a single report was opened, select and load exactly that report.
+        if(payload?.bericht && typeof payload.bericht==="object"){
+          const idx=list.length-1;
+          const sel=document.getElementById("historySelect");
+          if(sel){
+            sel.value=String(idx);
+            const item=list[idx];
+            const data=historyItemData(item);
+            if(data) applyForm(data);
+            if(typeof recalcTimes==="function") recalcTimes();
+            refresh();
+            sel.value=String(idx);
+          }
+          $("status").textContent="Bericht wurde geöffnet.";
+        }
       }catch(e){
         if(e?.name!=="AbortError")
           alert("Historie konnte nicht geöffnet werden: "+(e?.message||e));
