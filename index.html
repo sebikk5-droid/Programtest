@@ -488,48 +488,67 @@ function customerRoute(){
 }
 function applyCustomerRouteDay(d){
   const r=customerRoute();
-  const km1=document.querySelector(`[data-k="Kilometer${d*2-1}"]`);
-  const km2=document.querySelector(`[data-k="Kilometer${d*2}"]`);
+  const box=document.querySelector(`[data-daybox="${d}"]`);
+  if(!box)return;
 
+  const km1=box.querySelector(`[data-k="Kilometer${d*2-1}"]`);
+  const km2=box.querySelector(`[data-k="Kilometer${d*2}"]`);
   if(r.km){
-    if(km1) km1.value=r.km;
-    if(km2) km2.value=r.km;
+    if(km1 && km1.value==="") km1.value=r.km;
+    if(km2 && km2.value==="") km2.value=r.km;
   }
 
-  const a1=document.querySelector(`[data-k="RZstart${d*2-1}"]`);
-  const a2=document.querySelector(`[data-k="RZende${d*2-1}"]`);
-  const b1=document.querySelector(`[data-k="RZstart${d*2}"]`);
-  const b2=document.querySelector(`[data-k="RZende${d*2}"]`);
-  const pauseR=document.querySelector(`[data-k="PauseRZ${d*2}"]`);
+  const a1=box.querySelector(`[data-k="RZstart${d*2-1}"]`);
+  const a2=box.querySelector(`[data-k="RZende${d*2-1}"]`);
+  const b1=box.querySelector(`[data-k="RZstart${d*2}"]`);
+  const b2=box.querySelector(`[data-k="RZende${d*2}"]`);
+  const pauseOut=box.querySelector(`[data-k="PauseRZ${d*2-1}"]`);
+  const pauseBack=box.querySelector(`[data-k="PauseRZ${d*2}"]`);
+  const overrideOut=box.querySelector('[data-route-override="out"]');
+  const overrideBack=box.querySelector('[data-route-override="back"]');
 
-  if(r.minutes){
-    const outOverride=document.querySelector('[data-daybox="${d}"] [data-route-override="out"]');
-    const backOverride=document.querySelector('[data-daybox="${d}"] [data-route-override="back"]');
-    const outTime=outOverride && outOverride.value!=="" ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
-    const backTime=backOverride && backOverride.value!=="" ? Math.max(0,parseInt(backOverride.value,10)||0) : r.minutes;
+  const outTime=(overrideOut && overrideOut.value!=="")
+    ? Math.max(0,parseInt(overrideOut.value,10)||0) : r.minutes;
+  const backTime=(overrideBack && overrideBack.value!=="")
+    ? Math.max(0,parseInt(overrideBack.value,10)||0) : r.minutes;
 
-    // Anfahrt: Listenzeit oder manuell geänderte Zeit.
+  if(r.minutes>0){
+    // If the day is newly created and both fields are empty, use a
+    // deterministic default departure time. If one side already exists,
+    // calculate the other side from it. Existing manual times are preserved.
     if(a1 && a2){
-      if(a2.value) a1.value=addMinutesToTime(a2.value,-outTime);
-      else if(a1.value) a2.value=addMinutesToTime(a1.value,outTime);
+      if(!a1.value && !a2.value){
+        a1.value="07:00";
+        a2.value=addMinutesToTime(a1.value,outTime);
+      }else if(!a1.value && a2.value){
+        a1.value=addMinutesToTime(a2.value,-outTime);
+      }else if(a1.value && !a2.value){
+        a2.value=addMinutesToTime(a1.value,outTime);
+      }
     }
 
-    // Rückfahrt: Listenzeit/manuelle Zeit + die im Feld Pause Reisezeit
-    // eingetragene Pause.
-    const pauseMin=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
-    const rueckfahrtGesamt=backTime+pauseMin;
+    const pBack=pauseBack ? pauseMinutes(pauseBack.value||"0") : 0;
     if(b1 && b2){
-      if(b2.value) b1.value=addMinutesToTime(b2.value,-rueckfahrtGesamt);
-      else if(b1.value) b2.value=addMinutesToTime(b1.value,rueckfahrtGesamt);
+      if(!b1.value && !b2.value){
+        // Return starts after work; when no work-end exists yet, keep a
+        // sensible route anchor instead of leaving the whole route empty.
+        const workEnd=box.querySelector(`[data-k="AZende${d*2-1}"]`);
+        if(workEnd && workEnd.value) b1.value=addMinutesToTime(workEnd.value,0);
+        else if(a2 && a2.value) b1.value=addMinutesToTime(a2.value,0);
+        if(b1.value) b2.value=addMinutesToTime(b1.value,backTime+pBack);
+      }else if(!b1.value && b2.value){
+        b1.value=addMinutesToTime(b2.value,-(backTime+pBack));
+      }else if(b1.value && !b2.value){
+        b2.value=addMinutesToTime(b1.value,backTime+pBack);
+      }
     }
   }
 
-  const info=document.getElementById(`routeInfo${d}`);
-  if(info){
-    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Rückfahrt: ${fmtMin(r.minutes)} + 45 Min Pause.`;
-  }
+  const info=box.querySelector(`#routeInfo${d}`);
+  if(info) info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Rückfahrt: ${fmtMin(r.minutes)} + 45 Min Pause.`;
   recalcTimes();
 }
+function applyCustomerRouteDay1(){ applyCustomerRouteDay(1); }
 function applyCustomerRouteDay1(){ applyCustomerRouteDay(1); }
 fetch("companies.json").then(r=>{
   if(!r.ok) throw new Error("companies.json HTTP "+r.status);
@@ -548,8 +567,7 @@ fetch("companies.json").then(r=>{
     const a=address(c.adres||c.address||"");
     if($("street")) $("street").value=a[0]||"";
     if($("city")) $("city").value=a[1]||"";
-    applyCustomerRouteDay1();
-    for(let d=2;d<=visibleDays;d++) applyCustomerRouteDay(d);
+    for(let d=1;d<=visibleDays;d++) applyCustomerRouteDay(d);
     recalcTimes();
   };
   // If Safari recreated the document and the form is genuinely empty,
