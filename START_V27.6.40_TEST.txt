@@ -1,0 +1,11 @@
+V27.6.40 – ÖFFNEN EINES BEREITS GESPEICHERTEN EINZELBERICHTS
+
+Ausgangspunkt: V27.6.39.
+
+Korrektur:
+Beim Öffnen eines einzelnen JSON-Berichts wird jetzt der tatsächlich
+importierte Bericht in der lokalen Historie gesucht und ausgewählt.
+Wenn er bereits vorhanden ist, wird nicht mehr pauschal der letzte
+Bericht ausgewählt.
+
+Keine Änderung an PDF, Speichern, companies.json oder Techniker/Kunde.
