@@ -488,19 +488,19 @@ function customerRoute(){
 }
 function applyCustomerRouteDay(d){
   const r=customerRoute();
-  const km1=document.querySelector('[data-k="Kilometer${d*2-1}"]');
-  const km2=document.querySelector('[data-k="Kilometer${d*2}"]');
+  const km1=document.querySelector(`[data-k="Kilometer${d*2-1}"]`);
+  const km2=document.querySelector(`[data-k="Kilometer${d*2}"]`);
 
   if(r.km){
     if(km1) km1.value=r.km;
     if(km2) km2.value=r.km;
   }
 
-  const a1=document.querySelector('[data-k="RZstart${d*2-1}"]');
-  const a2=document.querySelector('[data-k="RZende${d*2-1}"]');
-  const b1=document.querySelector('[data-k="RZstart${d*2}"]');
-  const b2=document.querySelector('[data-k="RZende${d*2}"]');
-  const pauseR=document.querySelector('[data-k="PauseRZ${d*2}"]');
+  const a1=document.querySelector(`[data-k="RZstart${d*2-1}"]`);
+  const a2=document.querySelector(`[data-k="RZende${d*2-1}"]`);
+  const b1=document.querySelector(`[data-k="RZstart${d*2}"]`);
+  const b2=document.querySelector(`[data-k="RZende${d*2}"]`);
+  const pauseR=document.querySelector(`[data-k="PauseRZ${d*2}"]`);
 
   if(r.minutes){
     const outOverride=document.querySelector('[data-daybox="${d}"] [data-route-override="out"]');
@@ -524,7 +524,7 @@ function applyCustomerRouteDay(d){
     }
   }
 
-  const info=document.getElementById("routeInfo${d}");
+  const info=document.getElementById(`routeInfo${d}`);
   if(info){
     info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Rückfahrt: ${fmtMin(r.minutes)} + 45 Min Pause.`;
   }
@@ -588,9 +588,8 @@ function recalcTimes(){
   let travel=0,work=0,km=0;
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
-    const q=k=>box?.querySelector(`[data-k="${k}"]`)||{value:""};
-
     const box=document.querySelector(`[data-daybox="${d}"]`);
+    const q=k=>box?.querySelector(`[data-k="${k}"]`)||{value:""};
     const overrideOut=box?.querySelector('[data-route-override="out"]');
     const overrideBack=box?.querySelector('[data-route-override="back"]');
     const routeBase=customerRoute();
