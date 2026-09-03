@@ -1,11 +1,10 @@
 Servicebericht – Projektbasis
 
-V27.6.47:
-- Alte experimentelle PDF-Rückkehr/AUTOSAVE-Handler entfernt.
-- Nur noch EIN zentraler Active-Report-Schutz.
-- Snapshot bei jeder Eingabe/Änderung.
-- Snapshot unmittelbar vor PDF-Erstellung (Capture-Phase).
-- Snapshot bei pagehide/beforeunload.
-- Wiederherstellung bei pageshow, focus und visibilitychange.
-- Doppelte PDF-Speicher-Listener entfernt.
-- Gespeicherte Berichte bleiben separat.
+V27.6.49:
+- Naprawiono kluczowy problem zakresu: collectForm/applyForm są prywatne
+  w skrypcie Historie, dlatego mostek jest tworzony dokładnie w tym samym IIFE.
+- Aktualny Bericht jest zapisywany przy każdej zmianie.
+- Stan jest zapisywany bezpośrednio przed PDF.
+- Stan jest odtwarzany po przygotowaniu PDF i po pageshow Safari/iPadOS.
+- Reset usuwa aktywny zapis roboczy.
+- Istniejący mechanizm zapisu PDF pozostawiono bez zmian.
