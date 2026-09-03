@@ -316,7 +316,7 @@ document.getElementById("times").addEventListener("change",function(e){
   const row=parseInt(m[2],10);
   const d=Math.ceil(row/2);
   const outRow=d*2-1, backRow=d*2;
-  const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
+  const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
   const r=customerRoute();
   if(!r.minutes) return;
 
@@ -530,34 +530,37 @@ function applyCustomerRouteDay1(){
 }
 function applyCustomerRouteDay(d){
   const r=customerRoute();
-  const km1=document.querySelector(`[data-k="Kilometer${2*d-1}"]`);
-  const km2=document.querySelector(`[data-k="Kilometer${2*d}"]`);
+  const box=document.querySelector(`[data-daybox="${d}"]`);
+  const km1=box?.querySelector(`[data-k="Kilometer${2*d-1}"]`);
+  const km2=box?.querySelector(`[data-k="Kilometer${2*d}"]`);
 
   if(r.km){
     if(km1) km1.value=r.km;
     if(km2) km2.value=r.km;
   }
 
-  const a1=document.querySelector(`[data-k="RZstart${2*d-1}"]`);
-  const a2=document.querySelector(`[data-k="RZende${2*d-1}"]`);
-  const b1=document.querySelector(`[data-k="RZstart${2*d}"]`);
-  const b2=document.querySelector(`[data-k="RZende${2*d}"]`);
-  const pauseR=document.querySelector(`[data-k="PauseRZ${2*d}"]`);
+  const a1=box?.querySelector(`[data-k="RZstart${2*d-1}"]`);
+  const a2=box?.querySelector(`[data-k="RZende${2*d-1}"]`);
+  const b1=box?.querySelector(`[data-k="RZstart${2*d}"]`);
+  const b2=box?.querySelector(`[data-k="RZende${2*d}"]`);
+  const pauseR=box?.querySelector(`[data-k="PauseRZ${2*d}"]`);
 
   if(d>1 && a1 && a2 && !a1.value && !a2.value){
     const prev=document.querySelector(`[data-k="RZende${2*d-3}"]`);
     if(prev && prev.value) a1.value=prev.value;
   }
   if(r.minutes){
-    const outOverride=document.querySelector('[data-route-override="out"]');
-    const backOverride=document.querySelector('[data-route-override="back"]');
+    const dayBox=document.querySelector(`[data-daybox="${d}"]`);
+    const outOverride=dayBox?.querySelector('[data-route-override="out"]');
+    const backOverride=dayBox?.querySelector('[data-route-override="back"]');
     const outTime=outOverride && outOverride.value!=="" ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
     const backTime=backOverride && backOverride.value!=="" ? Math.max(0,parseInt(backOverride.value,10)||0) : r.minutes;
 
-    // Anfahrt: Listenzeit oder manuell geänderte Zeit.
+    // Anfahrt: Listenzeit/manuelle Zeit + Pause während der Fahrt.
+    const pauseOut=pauseMinutes(box?.querySelector(`[data-k="PauseRZ${2*d-1}"]`)?.value||"0");
     if(a1 && a2){
-      if(a2.value) a1.value=addMinutesToTime(a2.value,-outTime);
-      else if(a1.value) a2.value=addMinutesToTime(a1.value,outTime);
+      if(a2.value) a1.value=addMinutesToTime(a2.value,-(outTime+pauseOut));
+      else if(a1.value) a2.value=addMinutesToTime(a1.value,outTime+pauseOut);
     }
 
     // Rückfahrt: Listenzeit/manuelle Zeit + die im Feld Pause Reisezeit
@@ -695,7 +698,7 @@ function bindTimeInputs(){
       // Reisezeit-Ändern has no data-k, therefore the day comes from its daybox.
       const d=row?Math.ceil(row/2):(Number.isFinite(boxDay)?boxDay:1);
       const outRow=d*2-1,backRow=d*2;
-      const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
+      const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
       const r=customerRoute();
 
       // EXACTLY the day-1 "Reisezeit ändern" behavior, scoped to this day.
@@ -752,6 +755,17 @@ function bindTimeInputs(){
           if(el===b1)b2.value=addMinutesToTime(el.value,duration);
           else b1.value=addMinutesToTime(el.value,-duration);
         }
+      }
+
+      // Changing Pause während Fahrt must immediately recalculate Anfahrt
+      // from the selected route time and subtract the entered pause in netto.
+      if(key===`PauseRZ${outRow}` && r.minutes){
+        const a1=field("RZstart",outRow), a2=field("RZende",outRow);
+        const pauseOut=pauseMinutes(el.value||"0");
+        const outOverride=box?.querySelector('[data-route-override="out"]');
+        const baseMinutes=(outOverride && outOverride.value!=="")
+          ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
+        if(a1 && a2 && a1.value) a2.value=addMinutesToTime(a1.value,baseMinutes+pauseOut);
       }
 
       // Changing Pause Reisezeit must immediately recalculate Rückfahrt
