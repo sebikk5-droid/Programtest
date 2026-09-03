@@ -8,4 +8,4 @@ Date fix:
 
 V27.6.51 – poprawka: daty dla wierszy Reise-/Arbeitszeit są pobierane z daty Tag; jeśli Tag nie ma daty, automatycznie z Einsatzdatum + numer dnia. Data trafia do obu wierszy danego dnia.
 
-V27.6.53: Bemerkungen use embedded Helvetica + field.updateAppearances() before flatten. No manual drawText. Base functionality remains from V27.6.51.
+V27.6.54: Bemerkungen reverted to the original working PDF field mapping. Experimental font/drawText handling removed; Safari/history flow otherwise unchanged.
