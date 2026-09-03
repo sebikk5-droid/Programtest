@@ -11,3 +11,5 @@ V27.6.51 – poprawka: daty dla wierszy Reise-/Arbeitszeit są pobierane z daty 
 V27.6.59: PDF return snapshot is armed only on Generate, consumed before restore, and cleared on company change. No startup snapshot.
 
 V27.6.60: confirmed fix: removed load-time saveCurrentPdfReturnState(); live DOM is snapshotted only at Generate; snapshot is consumed before restore; company change cancels it.
+
+V27.6.61: preserve the exact live report on PDF return; snapshot only at Generate; consume once on pageshow; changing company cancels the pending snapshot.
