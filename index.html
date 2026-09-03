@@ -804,8 +804,8 @@ function isoAddDays(iso,n){
   return d.toISOString().slice(0,10);
 }
 function pdfDateFromDay(dayNo){
-  const el=document.querySelector(`[data-day="${dayNo}"]`);
-  return el?.value || isoAddDays($("date")?.value||"",Number(dayNo)-1);
+  const el=document.querySelector(`.daydate[data-day="${dayNo}"]`);
+  return el?.value || isoAddDays($("date")?.value||"", Number(dayNo)-1);
 }
 set(form,"Firma",c?c.firma:$("company").value);set(form,"Straße",$("street").value);set(form,"PLZ, Ort",$("city").value);
 set(form,"Ansprechpartner",$("contact").value);set(form,"Datum Einsatzbeginn",$("date").value.split("-").reverse().join("."));
