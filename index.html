@@ -317,6 +317,16 @@ function dayTemplate(d){
 </div>
 </div>`;
 }
+function syncDayDatesFromMainDate(){
+  const main=$("date")?.value||"";
+  if(!main) return;
+  document.querySelectorAll(".daydate").forEach(el=>{
+    const d=Number(el.dataset.day||0);
+    if(d>0 && !el.value) el.value=isoAddDays(main,d-1);
+  });
+}
+$("date")?.addEventListener("change",syncDayDatesFromMainDate);
+
 $("times").innerHTML=dayTemplate(1)+`
   <button type="button" id="addDay" class="primary" style="width:100%;margin:10px 0;font-size:17px">＋ Weiteren Tag hinzufügen</button>
 `;
@@ -328,7 +338,9 @@ $("addDay").onclick=()=>{
   $("addDay").insertAdjacentHTML("beforebegin",dayTemplate(d));
   initQuarterTimeSelects($("times"));
   const box=document.querySelector(`[data-daybox="${d}"]`);
-  if(box)box.setAttribute("data-day-active","1");
+  if(box)box.setAttribute("data-day-active","1"); 
+   const newDayDate=box?.querySelector(".daydate");
+   if(newDayDate && !newDayDate.value) newDayDate.value=isoAddDays($("date")?.value||"",d-1);
   visibleDays=d;
   bindTimeInputs();
 
@@ -823,6 +835,17 @@ pdfCheck(form,"Kontrollkästchen168",art==="mech");
 pdfCheck(form,"Kontrollkästchen169",art==="anw");
 pdfCheck(form,"Kontrollkästchen1",document.getElementById("maschine_ok").checked);
 
+function isoAddDays(iso,n){
+  if(!iso) return "";
+  const d=new Date(iso+"T00:00:00");
+  if(Number.isNaN(d.getTime())) return "";
+  d.setDate(d.getDate()+Number(n||0));
+  return d.toISOString().slice(0,10);
+}
+function pdfDateFromDay(dayNo){
+  const el=document.querySelector(`[data-day="${dayNo}"]`);
+  return el?.value || isoAddDays($("date")?.value||"",Number(dayNo)-1);
+}
 set(form,"Firma",c?c.firma:$("company").value);set(form,"Straße",$("street").value);set(form,"PLZ, Ort",$("city").value);
 set(form,"Ansprechpartner",$("contact").value);set(form,"Datum Einsatzbeginn",$("date").value.split("-").reverse().join("."));
 set(form,"Hersteller",$("manufacturer").value);set(form,"Typ",$("type").value);set(form,"Maschinennummer",$("machineNo").value);
@@ -836,8 +859,8 @@ let km=0, travel=0, work=0;
 for(let d=1;d<=visibleDays;d++){
   const a=(d*2)-1,b=d*2;
   const q=k=>document.querySelector(`[data-k="${k}"]`) || {value:""};
-  const day=document.querySelector(`[data-day="${d}"]`);
-  const date=day&&day.value?day.value.split("-").reverse().join("."):"";
+  const dateIso=pdfDateFromDay(d);
+  const date=dateIso?dateIso.split("-").reverse().join("."):"";
   set(form,`Datum${a}`,date);
   set(form,`Datum${b}`,date);
   ["RZstart","RZende","AZstart","AZende","Kilometer","PauseRZ","PauseAZ"].forEach(k=>set(form,`${k}${a}`,q(`${k}${a}`).value));
