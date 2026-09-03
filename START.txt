@@ -15,5 +15,3 @@ V27.6.65: clean PDF return snapshot. Snapshot only at PDF generation; restore on
 V27.6.66: fixed PDF button ReferenceError by removing orphaned savePdfReturnState/saveCurrentPdfReturnState calls. PDF generator logic unchanged.
 
 V27.6.67: cleaned obsolete PDF-return/sessionStorage restoration mechanism identified in V27.6.66 audit. Normal Bericht history and PDF generation retained unchanged. Backup: BACKUP_V27.6.66.zip.
-
-V27.6.68: PDF button/save flow fixed from real 67 baseline. Kept installCombined because it provides the actual save/open action; replaced its fixed 150ms race with a generation-state wait. No PDF fields, Bemerkungen, history, or signature layout changed. Backup: BACKUP_V27.6.67_BEFORE_PDF_FIX.zip.
