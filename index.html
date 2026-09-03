@@ -327,7 +327,8 @@ document.getElementById("times").addEventListener("change",function(e){
   const row=parseInt(m[2],10);
   const d=Math.ceil(row/2);
   const outRow=d*2-1, backRow=d*2;
-  const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
+  const box=el.closest("[data-daybox]");
+   const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
   const r=customerRoute();
   if(!r.minutes) return;
 
@@ -604,7 +605,7 @@ function recalcTimes(){
   let travel=0,work=0,km=0;
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
-    const q=k=>document.querySelector(`[data-k="${k}"]`)||{value:""};
+    const q=k=>box?.querySelector(`[data-k="${k}"]`)||{value:""};
 
     const box=document.querySelector(`[data-daybox="${d}"]`);
     const overrideOut=box?.querySelector('[data-route-override="out"]');
@@ -622,7 +623,7 @@ function recalcTimes(){
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
 
-    const sc=(name,val)=>{const el=document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
+    const sc=(name,val)=>{const el=box?.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
     sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
 
     if(box){
@@ -666,7 +667,7 @@ function bindTimeInputs(){
       // Reisezeit-Ändern has no data-k, therefore the day comes from its daybox.
       const d=row?Math.ceil(row/2):(Number.isFinite(boxDay)?boxDay:1);
       const outRow=d*2-1,backRow=d*2;
-      const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
+      const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
       const r=customerRoute();
 
       // EXACTLY the day-1 "Reisezeit ändern" behavior, scoped to this day.
