@@ -998,51 +998,12 @@ $("share").onclick=async()=>{
 
     // One source of truth: the existing „Gespeicherte Berichte“ list.
     // Save updates/adds an entry in exactly the same history used by the list.
-        const HISTORY_DIR_DB="servicebericht_history_dir_v1";
-    function historyDirOpen(){
-      return new Promise((resolve,reject)=>{
-        if(!window.indexedDB){resolve(null);return;}
-        const q=indexedDB.open(HISTORY_DIR_DB,1);
-        q.onupgradeneeded=()=>q.result.createObjectStore("data");
-        q.onsuccess=()=>resolve(q.result);
-        q.onerror=()=>reject(q.error);
-      });
-    }
-    async function historyDirGet(){
-      const db=await historyDirOpen();
-      if(!db)return null;
-      const dir=await new Promise((resolve,reject)=>{
-        const q=db.transaction("data","readonly").objectStore("data").get("dir");
-        q.onsuccess=()=>resolve(q.result||null);
-        q.onerror=()=>reject(q.error);
-      });
-      if(!dir)return null;
-      try{
-        const p=await dir.queryPermission({mode:"readwrite"});
-        if(p==="granted")return dir;
-      }catch(e){}
-      return null;
-    }
-    async function historyDirSet(dir){
-      const db=await historyDirOpen();
-      if(!db)return;
-      await new Promise((resolve,reject)=>{
-        const tx=db.transaction("data","readwrite");
-        tx.objectStore("data").put(dir,"dir");
-        tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
-      });
-    }
-    async function historyDirClear(){
-      const db=await historyDirOpen();
-      if(!db)return;
-      await new Promise(resolve=>{
-        const tx=db.transaction("data","readwrite");
-        tx.objectStore("data").delete("dir");
-        tx.oncomplete=resolve;tx.onerror=resolve;
-      });
-    }
-
-save?.addEventListener("click",async()=>{
+    save?.addEventListener("click",async()=>{
+      // IMPORTANT for iPad Safari:
+      // navigator.share() must be called from the original user gesture,
+      // before any await or picker/download fallback. The previous versions
+      // did asynchronous work first, which allowed Safari to turn the file
+      // into an automatic Downloads download.
       try{
         const list=loadHistory();
         const item=currentHistoryItem();
@@ -1051,6 +1012,7 @@ save?.addEventListener("click",async()=>{
         if(idx>=0 && list[idx]) list[idx]=item;
         else list.push(item);
 
+        // Keep the existing in-app Gespeicherte Berichte immediately.
         saveHistory(list);
         refresh();
         if(sel) sel.value=String(idx>=0 && idx<list.length ? idx : list.length-1);
@@ -1062,54 +1024,20 @@ save?.addEventListener("click",async()=>{
           savedAt:new Date().toISOString(),
           history:list
         },null,2);
-        const blob=new Blob([json],{type:"application/json"});
 
-        // On browsers with the File System Access API, ask for the folder
-        // once. The directory handle is stored in IndexedDB and reused.
-        if(typeof window.showDirectoryPicker==="function"){
-          let dir=await historyDirGet();
-          if(!dir){
-            try{
-              dir=await window.showDirectoryPicker({mode:"readwrite"});
-              await historyDirSet(dir);
-            }catch(e){
-              if(e?.name==="AbortError") return;
-              throw e;
-            }
-          }
-          try{
-            const fh=await dir.getFileHandle(suggested,{create:true});
-            const w=await fh.createWritable();
-            await w.write(blob);
-            await w.close();
-            $("status").textContent="Historie gespeichert.";
-            return;
-          }catch(e){
-            // Permission/handle can expire. Let the user select it again.
-            await historyDirClear();
-            try{
-              dir=await window.showDirectoryPicker({mode:"readwrite"});
-              await historyDirSet(dir);
-              const fh=await dir.getFileHandle(suggested,{create:true});
-              const w=await fh.createWritable();
-              await w.write(blob);
-              await w.close();
-              $("status").textContent="Historie gespeichert.";
-              return;
-            }catch(e2){
-              if(e2?.name==="AbortError") return;
-              throw e2;
-            }
-          }
-        }
+        const isIOS =
+          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
 
-        // iPadOS Safari: use the native iOS share sheet. The user selects
-        // "In Dateien sichern" and chooses the local folder.
-        if(/iPad|iPhone|iPod/.test(navigator.userAgent) &&
-           typeof navigator.share==="function"){
-          const file=new File([blob],suggested,{type:"text/plain"});
+        // Safari/iPadOS: invoke the native share sheet immediately.
+        // „In Dateien sichern“ in that sheet is the OS folder/file picker.
+        if(isIOS && typeof navigator.share==="function"){
+          const file=new File([json],suggested,{type:"application/json"});
           try{
-            await navigator.share({files:[file]});
+            await navigator.share({
+              files:[file],
+              title:suggested
+            });
             $("status").textContent="Historie gespeichert.";
             return;
           }catch(e){
@@ -1117,16 +1045,18 @@ save?.addEventListener("click",async()=>{
           }
         }
 
-        // Desktop browsers supporting Save-As.
+        // Chrome/Edge desktop: real Save-As picker.
         if(typeof window.showSaveFilePicker==="function"){
           try{
             const fh=await window.showSaveFilePicker({
               suggestedName:suggested,
-              types:[{description:"Servicebericht Historie",
-                accept:{"application/json":[".json"]}}]
+              types:[{
+                description:"Servicebericht Historie",
+                accept:{"application/json":[".json"]}
+              }]
             });
             const w=await fh.createWritable();
-            await w.write(blob);
+            await w.write(new Blob([json],{type:"application/json"}));
             await w.close();
             $("status").textContent="Historie gespeichert.";
             return;
@@ -1135,11 +1065,15 @@ save?.addEventListener("click",async()=>{
           }
         }
 
-        // Final browser fallback.
-        const url=URL.createObjectURL(blob);
+        // Only as a final fallback where neither native mechanism exists.
+        const url=URL.createObjectURL(new Blob([json],{type:"application/json"}));
         const a=document.createElement("a");
-        a.href=url;a.download=suggested;a.style.display="none";
-        document.body.appendChild(a);a.click();a.remove();
+        a.href=url;
+        a.download=suggested;
+        a.style.display="none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
         setTimeout(()=>URL.revokeObjectURL(url),5000);
         $("status").textContent="Historie-Datei wurde bereitgestellt.";
       }catch(e){
