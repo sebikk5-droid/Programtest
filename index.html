@@ -301,6 +301,7 @@ $("addDay").onclick=()=>{
   visibleDays=d;
   bindTimeInputs();
   applyCustomerRouteDay(d);
+  bindTimeInputs();
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
 };
@@ -316,6 +317,7 @@ document.getElementById("times").addEventListener("change",function(e){
   const row=parseInt(m[2],10);
   const d=Math.ceil(row/2);
   const outRow=d*2-1, backRow=d*2;
+  const box=document.querySelector(`[data-daybox="${d}"]`);
   const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
   const r=customerRoute();
   if(!r.minutes) return;
@@ -1021,6 +1023,9 @@ $("share").onclick=async()=>{
     });
 
     bindTimeInputs();
+    // Initialize customer route for every recreated day, exactly like Add Day.
+    // This is required because applyForm rebuilds day boxes from scratch.
+    for(let d=2; d<=visibleDays; d++) applyCustomerRouteDay(d);
     if(typeof recalcTimes==="function") recalcTimes();
   }
   function refresh(){
