@@ -301,8 +301,7 @@ $("addDay").onclick=()=>{
   visibleDays=d;
   bindTimeInputs();
 
-  // Use the selected customer's database values as defaults for this new day.
-  // Tag 1 remains untouched; later days get independent editable fields.
+  // Same automatic customer data as day 1.
   const r=customerRoute();
   const kmOut=box?.querySelector(`[data-k="Kilometer${d*2-1}"]`);
   const kmBack=box?.querySelector(`[data-k="Kilometer${d*2}"]`);
@@ -313,26 +312,7 @@ $("addDay").onclick=()=>{
   }
   if(pause && pause.value==="")pause.value="0";
 
-  if(box && r.minutes){
-    const a1=box.querySelector(`[data-k="RZstart${d*2-1}"]`);
-    const a2=box.querySelector(`[data-k="RZende${d*2-1}"]`);
-    const b1=box.querySelector(`[data-k="RZstart${d*2}"]`);
-    const b2=box.querySelector(`[data-k="RZende${d*2}"]`);
-    // Copy only the time-of-day anchors from Tag 1; calculate duration from DB.
-    const day1Start=document.querySelector('[data-k="RZstart1"]')?.value;
-    const day1WorkEnd=document.querySelector('[data-k="AZende1"]')?.value;
-    const outStart=day1Start || "07:00";
-    const backStart=day1WorkEnd || "17:00";
-    if(a1 && a2 && !a1.value && !a2.value){
-      a1.value=outStart;
-      a2.value=addMinutesToTime(a1.value,r.minutes);
-    }
-    if(b1 && b2 && !b1.value && !b2.value){
-      b1.value=backStart;
-      b2.value=addMinutesToTime(b1.value,r.minutes+pauseMinutes(pause?.value||"0"));
-    }
-  }
-
+  syncDayFromCustomer(d,true);
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
 };
@@ -348,7 +328,7 @@ document.getElementById("times").addEventListener("change",function(e){
   const row=parseInt(m[2],10);
   const d=Math.ceil(row/2);
   const outRow=d*2-1, backRow=d*2;
-  const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
+  const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
   const r=customerRoute();
   if(!r.minutes) return;
 
@@ -621,32 +601,63 @@ function getActiveDays(){
     .filter(Number.isFinite)
     .sort((a,b)=>a-b);
 }
+
+function syncDayFromCustomer(dayNo,forceDefaults){
+  const box=document.querySelector(`[data-daybox="${dayNo}"]`);
+  if(!box)return;
+  const r=customerRoute();
+  if(!r)return;
+
+  const kmOut=box.querySelector(`[data-k="Kilometer${dayNo*2-1}"]`);
+  const kmBack=box.querySelector(`[data-k="Kilometer${dayNo*2}"]`);
+
+  // Customer database is only the DEFAULT. Never overwrite an existing manual value.
+  if(forceDefaults || kmOut?.value==="") if(kmOut && r.km!=null && r.km!=="") kmOut.value=r.km;
+  if(forceDefaults || kmBack?.value==="") if(kmBack && r.km!=null && r.km!=="") kmBack.value=r.km;
+
+  // Reisezeit ändern fields remain editable. If they exist, initialize their
+  // value from the customer's minutes only when empty.
+  box.querySelectorAll('[data-route-override]').forEach(el=>{
+    if((forceDefaults || el.value==="") && r.minutes!=null && r.minutes!=="") {
+      el.value=String(r.minutes);
+    }
+  });
+}
+
 function recalcTimes(){
+  const dayBoxes=[...document.querySelectorAll("[data-daybox]")];
+  dayBoxes.forEach(box=>{
+    const d=Number(box.getAttribute("data-daybox")||0);
+    if(d>1) syncDayFromCustomer(d,false);
+  });
   let travel=0,work=0,km=0;
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
+    const q=k=>document.querySelector(`[data-k="${k}"]`)||{value:""};
+
     const box=document.querySelector(`[data-daybox="${d}"]`);
-    if(!box) continue;
-    const q=k=>box.querySelector(`[data-k="${k}"]`)||{value:""};
-    const overrideOut=box.querySelector('[data-route-override="out"]');
-    const overrideBack=box.querySelector('[data-route-override="back"]');
-    const r=customerRoute();
+    const overrideOut=box?.querySelector('[data-route-override="out"]');
+    const overrideBack=box?.querySelector('[data-route-override="back"]');
+    const routeBase=customerRoute();
+    const outMinutes=(overrideOut && overrideOut.value!=="")
+      ? Math.max(0,parseInt(overrideOut.value,10)||0) : routeBase.minutes;
+    const backMinutes=(overrideBack && overrideBack.value!=="")
+      ? Math.max(0,parseInt(overrideBack.value,10)||0) : routeBase.minutes;
 
-    const outBase=(overrideOut?.value!=="") ? Math.max(0,parseInt(overrideOut.value,10)||0) : r.minutes;
-    const backBase=(overrideBack?.value!=="") ? Math.max(0,parseInt(overrideBack.value,10)||0) : r.minutes;
-
-    const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value||"0"));
-    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value||"0"));
-    const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value||"0"));
-
+    const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value));
+    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
+    const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value));
     travel+=rt+rr; work+=wt;
-    km+=(parseFloat(String(q(`Kilometer${a}`).value||"").replace(",","."))||0);
-    km+=(parseFloat(String(q(`Kilometer${b}`).value||"").replace(",","."))||0);
+    km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
+    km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
 
-    const sc=(name,val)=>{const el=box.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
-    sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
-    box.dataset.routeOutMinutes=String(outBase);
-    box.dataset.routeBackMinutes=String(backBase);
+    const sc=(name,val)=>{const el=document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
+    sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
+
+    if(box){
+      box.dataset.routeOutMinutes=String(outMinutes);
+      box.dataset.routeBackMinutes=String(backMinutes);
+    }
   }
   if($("travelTotal"))$("travelTotal").value=fmtMin(travel);
   if($("workTotal"))$("workTotal").value=fmtMin(work);
