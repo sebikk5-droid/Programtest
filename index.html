@@ -166,8 +166,8 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <div class="muted">Jeden Tag werden zwei Zeilen im Bericht verwendet: 1. Anfahrt + Arbeit, 2. Rückfahrt. Pausen werden automatisch abgezogen.</div></section>
 
 <section class="card"><h2>Unterschrift</h2>
-<div class="grid"><div><label>Auftrags-Nr.</label><input id="order"></div><div><label>Techniker</label><input id="tech"></div>
-<div><label>Datum</label><input id="signdate" type="date"></div><div><label>Name Kunde</label><input id="customersign"></div></div>
+<div class="grid"><div><label>Auftrags-Nr.</label><input id="order"></div><div><label>Techniker</label><input id="tech" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"></div>
+<div><label>Datum</label><input id="signdate" type="date"></div><div><label>Name Kunde</label><input id="customersign" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"></div></div>
 </section>
 <div id="status"></div>
 </main>
@@ -191,6 +191,21 @@ document.querySelectorAll('#choices input').forEach(el=>{
 </script>
 <script>
 const $=id=>document.getElementById(id); let companies=[];
+
+// V27.6.39: Safari/iPadOS can restore/autofill stale numeric values into
+// these two free-text fields when returning from PDF/share. They must
+// start empty for a new report. Only pure numeric values are cleared;
+// real technician/customer names are never touched.
+function clearUnexpectedNumericSignFields(){
+  ["tech","customersign"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el && /^\s*\d+(?:[.,]\d+)?\s*$/.test(el.value||"")) el.value="";
+  });
+}
+clearUnexpectedNumericSignFields();
+window.addEventListener("pageshow",function(){
+  clearUnexpectedNumericSignFields();
+});
 const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signdate").value=today;
 
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
