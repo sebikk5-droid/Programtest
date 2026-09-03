@@ -1390,7 +1390,12 @@ $("share").onclick=async()=>{
 
     btn.addEventListener("click",function(){
       let tries=0;
-      const finish=async()=>{
+      const previousBlob=lastPdfBlob;
+    const finish=async()=>{
+      if(lastPdfBlob===previousBlob){
+        setTimeout(finish,100);
+        return;
+      }
         if(typeof lastPdfBlob!=="undefined" && lastPdfBlob){
           const filename="Service-Bericht.pdf";
           try{
@@ -1420,7 +1425,7 @@ $("share").onclick=async()=>{
         }
         if(++tries<150) setTimeout(finish,100);
       };
-      setTimeout(finish,150);
+      setTimeout(finish,100);
     });
   }
   if(document.readyState==="loading")
