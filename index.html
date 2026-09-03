@@ -1004,7 +1004,7 @@ $("share").onclick=async()=>{
         const item=currentHistoryItem();
         const idx=sel && sel.value!=="" ? Number(sel.value) : -1;
 
-        // Existing Gespeicherte Berichte remains the single source of truth.
+        // Keep the existing Gespeicherte Berichte logic unchanged.
         if(idx>=0 && list[idx]) list[idx]=item;
         else list.push(item);
 
@@ -1019,10 +1019,37 @@ $("share").onclick=async()=>{
           savedAt:new Date().toISOString(),
           history:list
         },null,2);
+        const blob=new Blob([json],{type:"application/json"});
+        const file=new File([blob],suggested,{type:"application/json"});
 
-        // The iPad/iPhone solution uses the native document/file picker
-        // through the browser. If Safari supports the File System Access API,
-        // this is the exact "Save As" flow with folder selection.
+        // iPad/iPhone: Safari and Chrome on iOS both use Apple's native
+        // share/file layer. Use the same path in both browsers so the
+        // existing „＋ Speichern“ button behaves identically.
+        const isIOS =
+          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+
+        if(isIOS && typeof navigator.share==="function"){
+          try{
+            const canShareFiles =
+              typeof navigator.canShare!=="function" ||
+              navigator.canShare({files:[file]});
+            if(canShareFiles){
+              await navigator.share({
+                files:[file],
+                title:suggested,
+                text:"Servicebericht Historie speichern"
+              });
+              $("status").textContent="Historie gespeichert.";
+              return;
+            }
+          }catch(e){
+            if(e?.name==="AbortError") return;
+          }
+        }
+
+        // Chrome/Edge/other browsers with File System Access:
+        // retain the real Save-As picker with folder selection.
         if(typeof window.showSaveFilePicker==="function"){
           try{
             const handle=await window.showSaveFilePicker({
@@ -1033,7 +1060,7 @@ $("share").onclick=async()=>{
               }]
             });
             const writable=await handle.createWritable();
-            await writable.write(json);
+            await writable.write(blob);
             await writable.close();
             $("status").textContent="Historie gespeichert.";
             return;
@@ -1042,15 +1069,12 @@ $("share").onclick=async()=>{
           }
         }
 
-        // Safari/iPadOS fallback: use a real file URL. The OS handles it
-        // through Files. No new visible button and no separate history.
-        const blob=new Blob([json],{type:"application/json"});
+        // Last fallback for browsers without either native mechanism.
         const url=URL.createObjectURL(blob);
         const a=document.createElement("a");
         a.href=url;
         a.download=suggested;
-        a.target="_blank";
-        a.rel="noopener";
+        a.style.display="none";
         document.body.appendChild(a);
         a.click();
         a.remove();
