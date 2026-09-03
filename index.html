@@ -1004,16 +1004,19 @@ $("share").onclick=async()=>{
         const item=currentHistoryItem();
         const idx=sel && sel.value!=="" ? Number(sel.value) : -1;
 
-        // The in-app Gespeicherte Berichte list is still updated normally.
         if(idx>=0 && list[idx]) list[idx]=item;
         else list.push(item);
+
+        // Keep the existing in-app Gespeicherte Berichte list.
         saveHistory(list);
         refresh();
         if(sel) sel.value=String(idx>=0 && idx<list.length ? idx : list.length-1);
 
-        // IMPORTANT: export ONLY the current/selected Bericht.
-        // Do not serialize the complete Gespeicherte Berichte list.
-        const suggestedBase=item.name.replace(/[\\/:*?"<>|]/g,"_")+"_Historie.json";
+        const today=new Date();
+        const pad=n=>String(n).padStart(2,"0");
+        const dateToday=`${pad(today.getDate())}.${pad(today.getMonth()+1)}.${today.getFullYear()}`;
+        const companyName=(item.name||"Bericht").trim().replace(/[\\/:*?"<>|]/g,"_");
+        const suggestedBase=`${companyName}_${dateToday}.json`;
         const json=JSON.stringify({
           format:"Servicebericht-Historie",
           version:1,
@@ -1026,30 +1029,40 @@ $("share").onclick=async()=>{
           /iPad|iPhone|iPod/.test(navigator.userAgent) ||
           (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
 
-        // iPad/iPhone Safari: native Files/share flow.
-        // Safari's share sheet does not provide a rename field, so ask for
-        // the filename before opening it.
-        let suggested=suggestedBase;
-        if(isIOS && typeof navigator.share==="function"){
-          const entered=prompt("Dateiname für die Historie:",suggestedBase);
+        // iPad/iPhone Safari:
+        // NEVER fall back to an automatic download. Safari's download
+        // fallback is exactly the behaviour we are trying to avoid.
+        // Ask for the filename first, then open the native iOS share sheet.
+        if(isIOS){
+          if(typeof navigator.share!=="function"){
+            alert("Safari unterstützt auf diesem Gerät keine direkte Auswahl über „In Dateien sichern“. Bitte die Seite in Safari neu laden.");
+            return;
+          }
+
+          const entered=prompt("Dateiname für den Bericht:",suggestedBase);
           if(entered===null) return;
           const cleaned=entered.trim().replace(/[\\/:*?"<>|]/g,"_");
-          if(cleaned) suggested=cleaned.endsWith(".json")?cleaned:cleaned+".json";
+          const suggested=cleaned ? (cleaned.endsWith(".json")?cleaned:cleaned+".json") : suggestedBase;
+
           const file=new File([blob],suggested,{type:"application/json"});
           try{
-            await navigator.share({files:[file],title:suggested});
-            $("status").textContent="Bericht gespeichert.";
-            return;
+            await navigator.share({
+              files:[file],
+              title:suggested
+            });
+            $("status").textContent="Historie gespeichert.";
           }catch(e){
             if(e?.name==="AbortError") return;
+            alert("Safari konnte „In Dateien sichern“ nicht öffnen. Es wurde KEIN automatischer Download durchgeführt.");
           }
+          return;
         }
 
-        // Chrome/Edge/Desktop: real Save-As.
+        // Chrome/Edge/Desktop: native Save-As picker.
         if(typeof window.showSaveFilePicker==="function"){
           try{
             const fh=await window.showSaveFilePicker({
-              suggestedName:suggested,
+              suggestedName:suggestedBase,
               types:[{
                 description:"Servicebericht Historie",
                 accept:{"application/json":[".json"]}
@@ -1058,16 +1071,16 @@ $("share").onclick=async()=>{
             const w=await fh.createWritable();
             await w.write(blob);
             await w.close();
-            $("status").textContent="Bericht gespeichert.";
+            $("status").textContent="Historie gespeichert.";
             return;
           }catch(e){
             if(e?.name==="AbortError") return;
           }
         }
 
-        // Browser fallback: Safari/other browsers without a native Save-As
-        // dialog get the same filename choice before downloading.
-        const entered=prompt("Dateiname für die Historie:",suggestedBase);
+        // Other browsers: retain the editable filename, but only use the
+        // download fallback outside iOS Safari.
+        const entered=prompt("Dateiname für den Bericht:",suggestedBase);
         if(entered===null) return;
         const cleaned=entered.trim().replace(/[\\/:*?"<>|]/g,"_");
         const fallbackName=cleaned ? (cleaned.endsWith(".json")?cleaned:cleaned+".json") : suggestedBase;
@@ -1080,12 +1093,12 @@ $("share").onclick=async()=>{
         a.click();
         a.remove();
         setTimeout(()=>URL.revokeObjectURL(url),5000);
-        $("status").textContent="Bericht-Datei wurde bereitgestellt.";
+        $("status").textContent="Historie-Datei wurde bereitgestellt.";
       }catch(e){
         if(e?.name!=="AbortError")
-          alert("Bericht konnte nicht gespeichert werden: "+(e?.message||e));
+          alert("Historie konnte nicht gespeichert werden: "+(e?.message||e));
       }
-    });;
+    });;;
 
     // Selecting an entry in the existing „Gespeicherte Berichte“ window
     // loads that exact entry. No second history/list is created.
