@@ -687,11 +687,19 @@ function fileSafePart(s){
     .replace(/^_|_$/g,"")
     || "";
 }
+function techInitials(s){
+  const parts=String(s||"").trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return "";
+  const first=(parts[0][0]||"").toUpperCase();
+  const last=(parts[parts.length-1][0]||"").toUpperCase();
+  if(parts.length===1) return first;
+  return (first+last).replace(/[^A-ZÄÖÜ]/g,"");
+}
 function pdfFileName(){
   const now=new Date();
   const pad=n=>String(n).padStart(2,"0");
   const dateStr=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
-  const tech=fileSafePart($("tech")?.value) || "Techniker";
+  const tech=techInitials($("tech")?.value) || "XX";
   const client=fileSafePart($("customersign")?.value) || fileSafePart(firmaName()) || "Kunde";
   return `Servicebericht_${dateStr}_${tech}_${client}.pdf`;
 }
