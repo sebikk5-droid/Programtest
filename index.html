@@ -80,6 +80,8 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .day-collapsed .day-content,
 .day-collapsed .day-body,
 .day-collapsed .day-fields{display:none!important}
+.history-file-btn{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weight:700;background:#e5e5ea;color:#111;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;box-sizing:border-box}
+#historyFileInput{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
 </style>
 </head>
 <body>
@@ -147,13 +149,14 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
         <option value="">— Bericht auswählen —</option>
       </select>
     </div>
-    <div class="field" style="display:flex;align-items:end;gap:8px;flex-wrap:wrap">
+    <div class="field" style="display:flex;align-items:end;gap:8px;flex-wrap:wrap;position:relative">
       <button type="button" id="historySave" class="primary">Speichern</button>
-      <button type="button" id="historyOpen">Öffnen</button>
+      <label class="history-file-btn" for="historyFileInput">Öffnen</label>
+      <input id="historyFileInput" type="file" accept=".json,.txt,text/plain,application/json,*/*">
       <button type="button" id="historyDelete">Löschen</button>
     </div>
   </div>
-  <div class="muted">Speichern: in der App und als Datei. iPad: im Teilen-Menü „In Dateien sichern“ tippen, dann den Ordner wählen.</div>
+  <div class="muted">Liste wählen lädt den Bericht in der App. Öffnen wählt eine Datei in „Dateien“ (Ordner antippen). Speichern: App + Teilen → In Dateien sichern.</div>
 </section>
 <div id="times"></div>
 <div class="grid" style="margin-top:12px">
@@ -1130,23 +1133,7 @@ $("share").onclick=async()=>{
     refresh(sel.value);
     $("status").textContent="Bericht wurde geöffnet.";
   }
-  async function importFile(){
-    let text=null;
-    if(window.showOpenFilePicker){
-      const [handle]=await window.showOpenFilePicker({
-        multiple:false,
-        types:[{description:"Servicebericht Historie",accept:{"application/json":[".json"]}}]
-      });
-      text=await (await handle.getFile()).text();
-    }else{
-      const input=document.createElement("input");
-      input.type="file";
-      input.accept=".json,application/json";
-      text=await new Promise(resolve=>{
-        input.onchange=async()=>resolve(input.files[0] ? await input.files[0].text() : null);
-        input.click();
-      });
-    }
+  function importPayloadText(text){
     if(!text) return;
     const payload=JSON.parse(text);
     let list=loadHistory();
@@ -1237,7 +1224,7 @@ $("share").onclick=async()=>{
   function init(){
     refresh("");
     const save=document.getElementById("historySave");
-    const open=document.getElementById("historyOpen");
+    const fileInput=document.getElementById("historyFileInput");
     const del=document.getElementById("historyDelete");
     const sel=document.getElementById("historySelect");
 
@@ -1272,10 +1259,17 @@ $("share").onclick=async()=>{
       }
     });
 
-    open?.addEventListener("click",async()=>{
+    sel?.addEventListener("change",()=>{
+      if(sel.value==="") return;
+      openSelected();
+    });
+
+    fileInput?.addEventListener("change",async()=>{
       try{
-        if(sel && sel.value!=="") openSelected();
-        else await importFile();
+        const f=fileInput.files && fileInput.files[0];
+        fileInput.value="";
+        if(!f) return;
+        importPayloadText(await f.text());
       }catch(e){
         if(e?.name!=="AbortError")
           alert("Historie konnte nicht geöffnet werden: "+(e?.message||e));
