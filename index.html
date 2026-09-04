@@ -674,6 +674,25 @@ fetch("companies.json").then(r=>{
 });
 
 function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
+function setIf(form,n,v){
+  const s=v==null?"":String(v).trim();
+  if(!s || s==="--:--") return;
+  set(form,n,s);
+}
+function filledTime(v){
+  const s=v==null?"":String(v).trim();
+  return s!=="" && s!=="--:--";
+}
+function clearPdfForm(form){
+  try{
+    form.getFields().forEach(field=>{
+      try{
+        if(typeof field.setText==="function") field.setText("");
+        else if(typeof field.uncheck==="function") field.uncheck();
+      }catch(e){}
+    });
+  }catch(e){}
+}
 function ls(t){return t.split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean)}
 
 function minutesBetween(a,b){
@@ -868,6 +887,7 @@ recalcTimes();
 $("status").textContent="PDF wird erstellt…";
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
+clearPdfForm(form);
 let c=companies[+$("company").value];
 
 // Auswahl -> Kontrollkästchen des Original-PDFs.
@@ -889,16 +909,17 @@ function pdfDateFromDay(dayNo){
   const el=box?.querySelector(".daydate");
   return el?.value || isoAddDays($("date")?.value||"", Number(dayNo)-1);
 }
-set(form,"Firma",c?c.firma:$("company").value);set(form,"Straße",$("street").value);set(form,"PLZ, Ort",$("city").value);
-set(form,"Ansprechpartner",$("contact").value);set(form,"Datum Einsatzbeginn",$("date").value.split("-").reverse().join("."));
-set(form,"Hersteller",$("manufacturer").value);set(form,"Typ",$("type").value);set(form,"Maschinennummer",$("machineNo").value);
-set(form,"Steuerung",$("control").value);set(form,"NC Version",$("nc").value);set(form,"PLC Version",$("plc").value);
-set(form,"Störung",$("fault").value);set(form,"Betriebsstunden",$("hours").value);set(form,"Auftrags-Nr",$("order").value);
-set(form,"Name Servicetechniker",$("tech").value);set(form,"Datum Unterschrift",$("signdate").value.split("-").reverse().join("."));
-set(form,"Name Unterschrift Kunde",$("customersign").value);
+setIf(form,"Firma",c?c.firma:"");
+setIf(form,"Straße",$("street").value);setIf(form,"PLZ, Ort",$("city").value);
+setIf(form,"Ansprechpartner",$("contact").value);
+setIf(form,"Hersteller",$("manufacturer").value);setIf(form,"Typ",$("type").value);setIf(form,"Maschinennummer",$("machineNo").value);
+setIf(form,"Steuerung",$("control").value);setIf(form,"NC Version",$("nc").value);setIf(form,"PLC Version",$("plc").value);
+setIf(form,"Störung",$("fault").value);setIf(form,"Betriebsstunden",$("hours").value);setIf(form,"Auftrags-Nr",$("order").value);
+setIf(form,"Name Servicetechniker",$("tech").value);
+setIf(form,"Name Unterschrift Kunde",$("customersign").value);
 let r=String($("remarks").value||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,r[i-1]||"");
-let p=ls($("parts").value);for(let i=1;i<=4;i++)set(form,"Ersatzteile "+i,p[i-1]||"");
+for(let i=1;i<=7;i++)setIf(form,"Bemerkung"+i,r[i-1]||"");
+let p=ls($("parts").value);for(let i=1;i<=4;i++)setIf(form,"Ersatzteile "+i,p[i-1]||"");
 let km=0, travel=0, work=0;
 const dayBoxes=[...document.querySelectorAll("[data-daybox]")];
 for(let d=1;d<=dayBoxes.length;d++){
@@ -906,30 +927,52 @@ for(let d=1;d<=dayBoxes.length;d++){
   const a=(d*2)-1,b=d*2;
   const q=k=>box.querySelector(`[data-k="${k}"]`) || {value:""};
   const dateEl=box.querySelector(".daydate");
-  const dateIso=dateEl?.value || isoAddDays($("date")?.value||"",d-1);
+  const hasTimes=filledTime(q(`RZstart${a}`).value)||filledTime(q(`RZende${a}`).value)||filledTime(q(`AZstart${a}`).value)||filledTime(q(`AZende${a}`).value)||filledTime(q(`RZstart${b}`).value)||filledTime(q(`RZende${b}`).value);
+  const dateIso=dateEl?.value || (hasTimes ? isoAddDays($("date")?.value||"",d-1) : "");
   const date=dateIso?dateIso.split("-").reverse().join("."):"";
-  set(form,`Datum${a}`,date);
-  set(form,`Datum${b}`,date);
-  ["RZstart","RZende","AZstart","AZende","Kilometer","PauseRZ","PauseAZ"].forEach(k=>set(form,`${k}${a}`,q(`${k}${a}`).value));
-  ["RZstart","RZende","Kilometer","PauseRZ"].forEach(k=>set(form,`${k}${b}`,q(`${k}${b}`).value));
+  if(date){ set(form,`Datum${a}`,date); set(form,`Datum${b}`,date); }
+  ["RZstart","RZende","AZstart","AZende"].forEach(k=>{ if(filledTime(q(`${k}${a}`).value)) set(form,`${k}${a}`,q(`${k}${a}`).value); });
+  ["RZstart","RZende"].forEach(k=>{ if(filledTime(q(`${k}${b}`).value)) set(form,`${k}${b}`,q(`${k}${b}`).value); });
+  const pauseOut=pauseMinutes(q(`PauseRZ${a}`).value||"");
+  const pauseWork=pauseMinutes(q(`PauseAZ${a}`).value||"");
+  const pauseBack=pauseMinutes(q(`PauseRZ${b}`).value||"");
+  if(pauseOut) set(form,`PauseRZ${a}`,q(`PauseRZ${a}`).value);
+  if(pauseWork) set(form,`PauseAZ${a}`,q(`PauseAZ${a}`).value);
+  if(pauseBack) set(form,`PauseRZ${b}`,q(`PauseRZ${b}`).value);
+  const kmA=q(`Kilometer${a}`).value, kmB=q(`Kilometer${b}`).value;
+  if(String(kmA).trim()!=="") set(form,`Kilometer${a}`,kmA);
+  if(String(kmB).trim()!=="") set(form,`Kilometer${b}`,kmB);
   const outOv=box.querySelector('[data-route-override="out"]');
   const backOv=box.querySelector('[data-route-override="back"]');
   const rt=outOv && String(outOv.value).trim()!==""
     ? Math.max(0,parseInt(outOv.value,10)||0)
-    : Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value||""));
-  const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value||""));
+    : Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseOut);
+  const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseWork);
   const rr=backOv && String(backOv.value).trim()!==""
     ? Math.max(0,parseInt(backOv.value,10)||0)
-    : Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value||""));
-  set(form,`RZ${a}`,fmtMin(rt));set(form,`AZ${a}`,fmtMin(wt));set(form,`RZ${b}`,fmtMin(rr));
-  km+=(parseFloat((q(`Kilometer${a}`).value||"").replace(",","."))||0);
-  km+=(parseFloat((q(`Kilometer${b}`).value||"").replace(",","."))||0);
+    : Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack);
+  if(rt) set(form,`RZ${a}`,fmtMin(rt));
+  if(wt) set(form,`AZ${a}`,fmtMin(wt));
+  if(rr) set(form,`RZ${b}`,fmtMin(rr));
+  km+=(parseFloat((kmA||"").replace(",","."))||0);
+  km+=(parseFloat((kmB||"").replace(",","."))||0);
   travel+=rt+rr;work+=wt;
 }
-set(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","));
-set(form,"Reisezeit gesamt",fmtMin(travel));
-set(form,"Arbeitszeit gesamt",fmtMin(work));
-set(form,"Gesamtzeit",fmtMin(travel+work));
+if(km) set(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","));
+if(travel) set(form,"Reisezeit gesamt",fmtMin(travel));
+if(work) set(form,"Arbeitszeit gesamt",fmtMin(work));
+if(travel||work) set(form,"Gesamtzeit",fmtMin(travel+work));
+
+const pdfHasContent=!!(
+  c || r.length || p.length || km || travel || work || bet || ein || art ||
+  document.getElementById("maschine_ok")?.checked ||
+  ["street","city","contact","manufacturer","type","machineNo","control","nc","plc","fault","hours","order","tech","customersign"]
+    .some(id=>String($(id)?.value||"").trim())
+);
+if(pdfHasContent){
+  if($("date").value) set(form,"Datum Einsatzbeginn",$("date").value.split("-").reverse().join("."));
+  if($("signdate").value) set(form,"Datum Unterschrift",$("signdate").value.split("-").reverse().join("."));
+}
 
 // Übern.-kosten: calibrated directly against the actual Leer.pdf table.
 // The first data row is around y=296 pt from the bottom; each row is
