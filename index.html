@@ -301,18 +301,9 @@ $("addDay").onclick=()=>{
   visibleDays=d;
   bindTimeInputs();
 
-  // Same automatic customer data as day 1.
-  const r=customerRoute();
-  const kmOut=box?.querySelector(`[data-k="Kilometer${d*2-1}"]`);
-  const kmBack=box?.querySelector(`[data-k="Kilometer${d*2}"]`);
-  const pause=box?.querySelector(`[data-k="PauseRZ${d*2}"]`);
-  if(r.km){
-    if(kmOut)kmOut.value=r.km;
-    if(kmBack)kmBack.value=r.km;
-  }
-  if(pause && pause.value==="")pause.value="0";
+  // Tag 2+ use the same customer-route routine as Tag 1.
+  applyCustomerRouteDay(d);
 
-  recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
 };
 
@@ -539,6 +530,53 @@ function applyCustomerRouteDay1(){
   }
   recalcTimes();
 }
+
+function applyCustomerRouteDay(d){
+  const r=customerRoute();
+  const box=document.querySelector(`[data-daybox="${d}"]`);
+  if(!box) return;
+  const km1=box?.querySelector(`[data-k="Kilometer${2*d-1}"]`);
+  const km2=box?.querySelector(`[data-k="Kilometer${2*d}"]`);
+
+  if(r.km){
+    if(km1) km1.value=r.km;
+    if(km2) km2.value=r.km;
+  }
+
+  const a1=box?.querySelector(`[data-k="RZstart${2*d-1}"]`);
+  const a2=box?.querySelector(`[data-k="RZende${2*d-1}"]`);
+  const b1=box?.querySelector(`[data-k="RZstart${2*d}"]`);
+  const b2=box?.querySelector(`[data-k="RZende${2*d}"]`);
+  const pauseR=box?.querySelector(`[data-k="PauseRZ${2*d}"]`);
+
+  if(r.minutes){
+    const outOverride=box?.querySelector('[data-route-override="out"]');
+    const backOverride=box?.querySelector('[data-route-override="back"]');
+    const outTime=outOverride && outOverride.value!=="" ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
+    const backTime=backOverride && backOverride.value!=="" ? Math.max(0,parseInt(backOverride.value,10)||0) : r.minutes;
+
+    // Anfahrt: Listenzeit oder manuell geänderte Zeit.
+    if(a1 && a2){
+      if(a2.value) a1.value=addMinutesToTime(a2.value,-outTime);
+      else if(a1.value) a2.value=addMinutesToTime(a1.value,outTime);
+    }
+
+    // Rückfahrt: Listenzeit/manuelle Zeit + die im Feld Pause Reisezeit
+    // eingetragene Pause.
+    const pauseMin=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
+    const rueckfahrtGesamt=backTime+pauseMin;
+    if(b1 && b2){
+      if(b2.value) b1.value=addMinutesToTime(b2.value,-rueckfahrtGesamt);
+      else if(b1.value) b2.value=addMinutesToTime(b1.value,rueckfahrtGesamt);
+    }
+  }
+
+  const info=box?.querySelector(`#routeInfo${d}`);
+  if(info){
+    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Rückfahrt: ${fmtMin(r.minutes)} + 45 Min Pause.`;
+  }
+  recalcTimes();
+}
 fetch("companies.json").then(r=>{
   if(!r.ok) throw new Error("companies.json HTTP "+r.status);
   return r.json();
@@ -557,15 +595,7 @@ fetch("companies.json").then(r=>{
     if($("street")) $("street").value=a[0]||"";
     if($("city")) $("city").value=a[1]||"";
     applyCustomerRouteDay1();
-    for(let d=2;d<=visibleDays;d++){
-      const box=document.querySelector(`[data-daybox="${d}"]`);
-      const a=box?.querySelector(`[data-k="Kilometer${d*2-1}"]`);
-      const b=box?.querySelector(`[data-k="Kilometer${d*2}"]`);
-      const p=box?.querySelector(`[data-k="PauseRZ${d*2}"]`);
-      const r=customerRoute();
-      if(r.km){if(a)a.value=r.km;if(b)b.value=r.km;}
-      if(p)p.value="45";
-    }
+    for(let d=2;d<=visibleDays;d++) applyCustomerRouteDay(d);
     recalcTimes();
   };
   // If Safari recreated the document and the form is genuinely empty,
@@ -604,38 +634,45 @@ function recalcTimes(){
   let travel=0,work=0,km=0;
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
-    const q=k=>document.querySelector(`[data-k="${k}"]`)||{value:""};
-
     const box=document.querySelector(`[data-daybox="${d}"]`);
-    const overrideOut=box?.querySelector('[data-route-override="out"]');
-    const overrideBack=box?.querySelector('[data-route-override="back"]');
+    const q=k=>box?.querySelector(`[data-k="${k}"]`)||{value:""};
     const routeBase=customerRoute();
-    const outMinutes=(overrideOut && overrideOut.value!=="")
-      ? Math.max(0,parseInt(overrideOut.value,10)||0) : routeBase.minutes;
-    const backMinutes=(overrideBack && overrideBack.value!=="")
-      ? Math.max(0,parseInt(overrideBack.value,10)||0) : routeBase.minutes;
 
-    const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value));
+    const rzs=q(`RZstart${a}`).value, rze=q(`RZende${a}`).value;
+    const rbs=q(`RZstart${b}`).value, rbe=q(`RZende${b}`).value;
+    const outOverride=box?.querySelector('[data-route-override="out"]');
+    const backOverride=box?.querySelector('[data-route-override="back"]');
+
+    const outBase=(outOverride && outOverride.value!=="")
+      ? Math.max(0,parseInt(outOverride.value,10)||0) : routeBase.minutes;
+    const backBase=(backOverride && backOverride.value!=="")
+      ? Math.max(0,parseInt(backOverride.value,10)||0) : routeBase.minutes;
+
+    let rt=minutesBetween(rzs,rze)-pauseMinutes(q(`PauseRZ${a}`).value);
+    let rr=minutesBetween(rbs,rbe)-pauseMinutes(q(`PauseRZ${b}`).value);
+
+    // Tag 1 stays on its original calculation. For Tag 2+ only, if no clock
+    // pair exists yet, use the exact customer-list travel duration so Netto
+    // and the final total are populated immediately.
+    if(d>1 && !rzs && !rze) rt=Math.max(0,outBase-pauseMinutes(q(`PauseRZ${a}`).value));
+    if(d>1 && !rbs && !rbe) rr=Math.max(0,backBase-pauseMinutes(q(`PauseRZ${b}`).value));
+
+    rt=Math.max(0,rt);
+    rr=Math.max(0,rr);
     const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
-    const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value));
+
     travel+=rt+rr; work+=wt;
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
 
-    const sc=(name,val)=>{const el=document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
+    const sc=(name,val)=>{const el=box?.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
     sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
-
-    if(box){
-      box.dataset.routeOutMinutes=String(outMinutes);
-      box.dataset.routeBackMinutes=String(backMinutes);
-    }
   }
   if($("travelTotal"))$("travelTotal").value=fmtMin(travel);
   if($("workTotal"))$("workTotal").value=fmtMin(work);
   if($("kmTotal"))$("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
   if($("allTotal"))$("allTotal").value=fmtMin(travel+work);
 }
-
 // Auswahlfelder: innerhalb jeder Gruppe nur eine Option gleichzeitig.
 document.querySelectorAll('#choices input[type="checkbox"][name]').forEach(cb=>{
   cb.addEventListener('change',()=>{
