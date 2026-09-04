@@ -60,10 +60,92 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 #pdfFields textarea,#pdfFields input{width:100%;box-sizing:border-box;min-height:40px}
 #pdfFields label{display:block;font-weight:700;font-size:13px;margin:3px 0 4px}
 </style><style>
-#choices{margin:12px 0}
-#choices h3{margin:8px 0;font-size:16px}
-.choice-group{border:1px solid #ddd;border-radius:10px;padding:10px;margin:8px 0}
-.choice-group .check{display:inline-flex;align-items:center;gap:8px;margin:6px 14px 6px 0;font-weight:600}
+#choices{margin:0}
+#choices h2{margin-bottom:14px}
+.choice-block{margin:0 0 16px}
+.choice-block:last-child{margin-bottom:0}
+.choice-block > .choice-label{
+  display:block;
+  font-size:12px;
+  font-weight:650;
+  color:#555;
+  margin:0 0 8px;
+}
+.choice-options{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.choice-opt{
+  position:relative;
+  flex:1 1 auto;
+  min-width:min(100%,140px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:0;
+  margin:0;
+  padding:12px 14px;
+  min-height:48px;
+  border:1px solid #d1d1d6;
+  border-radius:11px;
+  background:#f7f7f8;
+  font-size:15px;
+  font-weight:650;
+  color:#222;
+  text-align:center;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+}
+.choice-opt input{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+  width:0;
+  height:0;
+  margin:0;
+}
+.choice-opt:has(input:checked),
+.choice-opt.is-on{
+  background:#163a5c;
+  border-color:#163a5c;
+  color:#fff;
+}
+.choice-opt-wide{
+  flex:1 1 100%;
+  justify-content:flex-start;
+  text-align:left;
+  gap:10px;
+  font-weight:600;
+}
+.choice-opt-wide::before{
+  content:"";
+  width:22px;
+  height:22px;
+  flex:0 0 22px;
+  border:2px solid #c5c5ca;
+  border-radius:6px;
+  background:#fff;
+  box-sizing:border-box;
+}
+.choice-opt-wide:has(input:checked),
+.choice-opt-wide.is-on{
+  background:#eef5fb;
+  border-color:#8fb0d2;
+  color:#163a5c;
+}
+.choice-opt-wide:has(input:checked)::before,
+.choice-opt-wide.is-on::before{
+  border-color:#163a5c;
+  background:#163a5c;
+  box-shadow:inset 0 0 0 3px #eef5fb;
+}
+@media(max-width:520px){
+  .choice-opt{min-width:100%}
+}
+.choice-group{margin:8px 0}
+.choice-group .check{display:inline-flex;align-items:center;gap:8px;font-weight:600}
 .choice-group input[type=checkbox]{width:22px;height:22px;min-height:22px}
 
 .day-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
@@ -121,34 +203,6 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 
 <section class="card"><h2>Reise- und Arbeitszeit</h2>
 
-<div id="choices" class="card">
-  <h2>Auswahl</h2>
-
-  <div class="choice-group">
-    <h3>Betriebsbereitschaft</h3>
-    <label class="check"><input type="checkbox" name="betriebs" value="io"> i.O.</label>
-    <label class="check"><input type="checkbox" name="betriebs" value="bedingt"> bedingt betriebsbereit</label>
-    <label class="check"><input type="checkbox" name="betriebs" value="nicht"> nicht betriebsbereit</label>
-  </div>
-
-  <div class="choice-group">
-    <h3>Neuer Einsatz erforderlich?</h3>
-    <label class="check"><input type="checkbox" name="einsatz" value="nein"> nein</label>
-    <label class="check"><input type="checkbox" name="einsatz" value="ja"> ja</label>
-  </div>
-
-  <div class="choice-group">
-    <h3>Art des Einsatzes</h3>
-    <label class="check"><input type="checkbox" name="art" value="el"> El.</label>
-    <label class="check"><input type="checkbox" name="art" value="mech"> Mech.</label>
-    <label class="check"><input type="checkbox" name="art" value="anw"> Anw. Tech.</label>
-  </div>
-
-  <div class="choice-group">
-    <label class="check"><input id="maschine_ok" type="checkbox"> Maschine in ordnungsgemäßem Zustand übernommen</label>
-  </div>
-</div>
-
 <section id="historySection" class="card" style="margin:12px 0;">
   <div class="sectiontitle">Historie</div>
   <div class="row">
@@ -176,6 +230,42 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </div>
 <div class="muted">Jeden Tag werden zwei Zeilen im Bericht verwendet: 1. Anfahrt + Arbeit, 2. Rückfahrt. Pausen werden automatisch abgezogen.</div></section>
 
+<section id="choices" class="card">
+  <h2>Auswahl</h2>
+
+  <div class="choice-block">
+    <span class="choice-label">Betriebsbereitschaft</span>
+    <div class="choice-options">
+      <label class="choice-opt"><input type="checkbox" name="betriebs" value="io"> i.O.</label>
+      <label class="choice-opt"><input type="checkbox" name="betriebs" value="bedingt"> bedingt betriebsbereit</label>
+      <label class="choice-opt"><input type="checkbox" name="betriebs" value="nicht"> nicht betriebsbereit</label>
+    </div>
+  </div>
+
+  <div class="choice-block">
+    <span class="choice-label">Neuer Einsatz erforderlich?</span>
+    <div class="choice-options">
+      <label class="choice-opt"><input type="checkbox" name="einsatz" value="nein"> nein</label>
+      <label class="choice-opt"><input type="checkbox" name="einsatz" value="ja"> ja</label>
+    </div>
+  </div>
+
+  <div class="choice-block">
+    <span class="choice-label">Art des Einsatzes</span>
+    <div class="choice-options">
+      <label class="choice-opt"><input type="checkbox" name="art" value="el"> El.</label>
+      <label class="choice-opt"><input type="checkbox" name="art" value="mech"> Mech.</label>
+      <label class="choice-opt"><input type="checkbox" name="art" value="anw"> Anw. Tech.</label>
+    </div>
+  </div>
+
+  <div class="choice-block">
+    <div class="choice-options">
+      <label class="choice-opt choice-opt-wide"><input id="maschine_ok" type="checkbox"> Maschine in ordnungsgemäßem Zustand übernommen</label>
+    </div>
+  </div>
+</section>
+
 <section class="card"><h2>Unterschrift</h2>
 <div class="grid"><div><label>Auftrags-Nr.</label><input id="order"></div><div><label>Techniker</label><input id="tech" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"></div>
 <div><label>Datum</label><input id="signdate" type="date"></div><div><label>Name Kunde</label><input id="customersign" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"></div></div>
@@ -183,7 +273,8 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <div id="status"></div>
 </main>
 <div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button></div>
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js">
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script>
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   const k="pdf_"+el.id;
   try{el.value=localStorage.getItem(k)||"";}catch(e){}
@@ -799,13 +890,23 @@ function recalcTimes(){
   if($("allTotal"))$("allTotal").value=fmtMin(travel+work);
 }
 // Auswahlfelder: innerhalb jeder Gruppe nur eine Option gleichzeitig.
-document.querySelectorAll('#choices input[type="checkbox"][name]').forEach(cb=>{
+function syncChoiceVisual(el){
+  const label=el.closest(".choice-opt");
+  if(label) label.classList.toggle("is-on", !!el.checked);
+}
+document.querySelectorAll('#choices input[type="checkbox"]').forEach(cb=>{
+  syncChoiceVisual(cb);
   cb.addEventListener('change',()=>{
-    if(cb.checked){
+    if(cb.name && cb.checked){
       document.querySelectorAll('#choices input[name="'+cb.name+'"]').forEach(x=>{
-        if(x!==cb) x.checked=false;
+        if(x!==cb){
+          x.checked=false;
+          try{localStorage.setItem('choice_'+(x.id||x.name+'_'+x.value),'0');}catch(e){}
+          syncChoiceVisual(x);
+        }
       });
     }
+    syncChoiceVisual(cb);
   });
 });
 function pdfCheck(form,name,on){
@@ -1153,6 +1254,10 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
 
     bindTimeInputs();
     if(typeof recalcTimes==="function") recalcTimes();
+    document.querySelectorAll("#choices input[type=checkbox]").forEach(el=>{
+      const label=el.closest(".choice-opt");
+      if(label) label.classList.toggle("is-on", !!el.checked);
+    });
   }
   function historyItemData(item){
     if(!item || typeof item!=="object") return null;
