@@ -92,7 +92,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <input id="customerSearch" type="search" placeholder="Firma eingeben, z. B. Die" autocomplete="off" style="width:100%;">
 <div id="customerSearchResults" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid #bbb;border-radius:8px;max-height:240px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15);"></div>
 </div>
-<select id="company"><option>Wird geladen…</option></select>
+<select id="company" autocomplete="off"><option value="">— Firma auswählen —</option></select>
 <div class="grid">
 <div><label>Straße</label><input id="street"></div><div><label>PLZ, Ort</label><input id="city"></div>
 <div><label>Ansprechpartner</label><input id="contact"></div><div><label>Einsatzdatum</label><input id="date" type="date"></div>
@@ -547,9 +547,16 @@ function addMinutesToTime(t,mins){
   m=((m%1440)+1440)%1440;
   return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
 }
+function selectedCompany(){
+  const v=$("company")?.value;
+  if(v==="" || v==null) return null;
+  const i=Number(v);
+  if(!Number.isInteger(i) || i<0 || !Array.isArray(companies) || !companies[i]) return null;
+  return companies[i];
+}
 function customerRoute(){
   if(!Array.isArray(companies)) return {km:0,minutes:0};
-  return parseRoute(companies[+$("company").value]);
+  return parseRoute(selectedCompany());
 }
 function applyCustomerRouteDay1(){
   const r=customerRoute();
@@ -656,7 +663,7 @@ fetch("companies.json").then(r=>{
     // in sessionStorage for Safari. Choosing another company must invalidate
     // that old snapshot, otherwise pageshow can restore the previous company.
 
-    const c=companies[+$("company").value];
+    const c=selectedCompany();
     if(!c)return;
     const a=address(c.adres||c.address||"");
     if($("street")) $("street").value=a[0]||"";
@@ -691,6 +698,7 @@ function clearPdfForm(form){
         else if(typeof field.uncheck==="function") field.uncheck();
       }catch(e){}
     });
+    try{ form.updateFieldAppearances(); }catch(e){}
   }catch(e){}
 }
 function ls(t){return t.split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean)}
@@ -888,7 +896,7 @@ $("status").textContent="PDF wird erstellt…";
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
 clearPdfForm(form);
-let c=companies[+$("company").value];
+let c=selectedCompany();
 
 // Auswahl -> Kontrollkästchen des Original-PDFs.
 const bet=document.querySelector('#choices input[name="betriebs"]:checked')?.value||"";
@@ -909,7 +917,7 @@ function pdfDateFromDay(dayNo){
   const el=box?.querySelector(".daydate");
   return el?.value || isoAddDays($("date")?.value||"", Number(dayNo)-1);
 }
-setIf(form,"Firma",c?c.firma:"");
+set(form,"Firma",c?(c.firma||c.name||""):"");
 setIf(form,"Straße",$("street").value);setIf(form,"PLZ, Ort",$("city").value);
 setIf(form,"Ansprechpartner",$("contact").value);
 setIf(form,"Hersteller",$("manufacturer").value);setIf(form,"Typ",$("type").value);setIf(form,"Maschinennummer",$("machineNo").value);
