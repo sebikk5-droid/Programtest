@@ -1,0 +1,13 @@
+Servicebericht v2.0
+Created by S. Pawlina
+
+Live: https://sebikk5-droid.github.io/Servicebericht-v2/
+
+Fixes in this build:
+- Credit v2.0
+- Service Worker registered
+- pdf-lib bundled locally (vendor/)
+- Historie as own section
+- Fixed servicebericht-v2.html redirect
+- Removed leftover junk files
+- Fixed duplicate lang attribute

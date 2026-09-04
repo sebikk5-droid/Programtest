@@ -1,0 +1,10 @@
+Wgraj CAŁĄ zawartość tego folderu do repo:
+https://github.com/sebikk5-droid/Servicebericht-v2
+
+1. Otwórz Servicebericht-v2
+2. Add file / Upload files (lub upload/main)
+3. Wrzuć WSZYSTKIE pliki z tego folderu (razem z folderem vendor/)
+4. Commit changes
+
+Po 1–2 minutach odśwież:
+https://sebikk5-droid.github.io/Servicebericht-v2/
