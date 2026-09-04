@@ -176,6 +176,12 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .daybox .sectiontitle{border-top-color:#b7cde3}
 .daybox .day-actions button{background:#fff}
 .daybox input,.daybox select{background:#fff}
+.daybox .daydate{
+  max-width:170px;
+  min-height:34px;
+  padding:7px 10px;
+  font-size:14px;
+}
 </style>
 </head>
 <body>
@@ -276,8 +282,11 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 
 <section class="card"><h2>Unterschrift</h2>
-<div class="grid"><div><label>Auftrags-Nr.</label><input id="order"></div><div><label>Techniker</label><input id="tech" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"></div>
-<div><label>Datum</label><input id="signdate" type="date"></div><div><label>Name Kunde</label><input id="customersign" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"></div></div>
+<div class="grid">
+<div><label>Techniker</label><input id="tech" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"></div>
+<div><label>Datum</label><input id="signdate" type="date"></div>
+<div class="full"><label>Name Kunde</label><input id="customersign" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"></div>
+</div>
 </section>
 <div id="status"></div>
 </main>
@@ -668,6 +677,23 @@ function firmaName(){
   if(typed && !typed.startsWith("—")) return typed;
   const c=selectedCompany();
   return c?String(c.firma||c.name||"").trim():"";
+}
+function fileSafePart(s){
+  return String(s||"")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g," ")
+    .replace(/\s+/g,"_")
+    .replace(/_+/g,"_")
+    .replace(/^_|_$/g,"")
+    || "";
+}
+function pdfFileName(){
+  const now=new Date();
+  const pad=n=>String(n).padStart(2,"0");
+  const dateStr=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const tech=fileSafePart($("tech")?.value) || "Techniker";
+  const client=fileSafePart($("customersign")?.value) || fileSafePart(firmaName()) || "Kunde";
+  return `Servicebericht_${dateStr}_${tech}_${client}.pdf`;
 }
 function customerRoute(){
   if(!Array.isArray(companies)) return {km:0,minutes:0};
@@ -1060,7 +1086,7 @@ setIf(form,"Straße",$("street").value);setIf(form,"PLZ, Ort",$("city").value);
 setIf(form,"Ansprechpartner",$("contact").value);
 setIf(form,"Hersteller",$("manufacturer").value);setIf(form,"Typ",$("type").value);setIf(form,"Maschinennummer",$("machineNo").value);
 setIf(form,"Steuerung",$("control").value);setIf(form,"NC Version",$("nc").value);setIf(form,"PLC Version",$("plc").value);
-setIf(form,"Störung",$("fault").value);setIf(form,"Betriebsstunden",$("hours").value);setIf(form,"Auftrags-Nr",$("order").value);
+setIf(form,"Störung",$("fault").value);setIf(form,"Betriebsstunden",$("hours").value);
 setIf(form,"Name Servicetechniker",$("tech").value);
 setIf(form,"Name Unterschrift Kunde",$("customersign").value);
 let r=String($("remarks").value||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
@@ -1115,7 +1141,7 @@ if(travel||work) set(form,"Gesamtzeit",fmtMinPdf(travel+work));
 const pdfHasContent=!!(
   c || firmaName() || r.length || p.length || km || travel || work || bet || ein || art ||
   document.getElementById("maschine_ok")?.checked ||
-  ["street","city","contact","manufacturer","type","machineNo","control","nc","plc","fault","hours","order","tech","customersign"]
+  ["street","city","contact","manufacturer","type","machineNo","control","nc","plc","fault","hours","tech","customersign"]
     .some(id=>String($(id)?.value||"").trim())
 );
 if(pdfHasContent){
@@ -1587,7 +1613,7 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
         return;
       }
 
-      const defaultName="Servicebericht.pdf";
+      const defaultName=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
 
       try{
         if(window.showSaveFilePicker){
@@ -1650,7 +1676,7 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
         return;
       }
         if(typeof lastPdfBlob!=="undefined" && lastPdfBlob){
-          const filename="Servicebericht.pdf";
+          const filename=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
           try{
             if(window.showSaveFilePicker){
               const handle=await window.showSaveFilePicker({
