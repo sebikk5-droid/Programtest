@@ -198,7 +198,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <div><label>Ansprechpartner</label><input id="contact"></div><div><label>Einsatzdatum</label><input id="date" type="date"></div>
 </div></section>
 
-<section class="card"><h2>Maszyna</h2>
+<section class="card"><h2>Maschine</h2>
 <div class="grid">
 <div><label>Hersteller</label><input id="manufacturer"></div><div><label>Typ</label><input id="type"></div>
 <div><label>Nr.</label><input id="machineNo"></div><div><label>Steuerungstyp</label><input id="control"></div>
@@ -412,7 +412,7 @@ function dayTemplate(d){
       <div class="field"><label>KM Rückfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${d*2}" placeholder="KM Rückfahrt"></div>
       <div class="field"><label>Gesamtzeit netto</label><input type="text" data-calc="total${d}" readonly></div>
     </div>
-    <div class="muted" id="routeInfo${d}">${d===1?"Po wybraniu firmy dzień 1 pobiera km i czas jazdy z listy klienta.":"KM tego dnia wpisujesz ręcznie. Zeit jazdy i pracy liczy się automatycznie."}</div>
+    <div class="muted" id="routeInfo${d}">${d===1?"Nach Auswahl der Firma übernimmt Tag 1 km und Reisezeit aus der Kundenliste.":"km für diesen Tag manuell eintragen. Reise- und Arbeitszeit werden automatisch berechnet."}</div>
     </div>
   <div class="day-end-actions">
   <button type="button" class="btn-day-collapse" data-collapse-day="${d}">Einklappen</button>
