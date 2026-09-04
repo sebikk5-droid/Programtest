@@ -171,7 +171,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 <div id="status"></div>
 </main>
-<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button class="go" id="share" disabled>📎 PDF teilen</button><button class="go" id="savePdf" disabled>💾 PDF speichern</button></div>
+<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen</button><button class="go" id="savePdf" disabled>💾 PDF speichern</button></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js">
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   const k="pdf_"+el.id;
@@ -822,31 +822,10 @@ for(let d=1;d<=visibleDays;d++){
 }
 form.updateFieldAppearances();form.flatten();let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
-$("share").disabled=false;
-$("status").textContent="Fertig – das PDF ist vorbereitet. Klicken Sie auf „📎 PDF teilen“ zum Teilen.";
+const savePdfBtn=$("savePdf");
+if(savePdfBtn) savePdfBtn.disabled=false;
+$("status").textContent="Fertig – das PDF ist vorbereitet.";
 }catch(e){$("status").textContent="Fehler: "+e.message}
-};
-$("share").onclick=async()=>{
-  if(!lastPdfBlob){$("status").textContent="Najpierw kliknij „PDF erstellen”.";return;}
-  const filename="Servicebericht.pdf";
-  try{
-    const file=new File([lastPdfBlob],filename,{type:"application/pdf"});
-    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
-      await navigator.share({files:[file],title:"Servicebericht"});
-      $("status").textContent="PDF wurde geteilt.";
-    }else{
-      const url=URL.createObjectURL(lastPdfBlob),a=document.createElement("a");
-      a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url),2000);
-      $("status").textContent="PDF wurde gespeichert.";
-    }
-  }catch(e){
-    if(e && e.name==="AbortError"){ $("status").textContent="Teilen abgebrochen."; return; }
-    const url=URL.createObjectURL(lastPdfBlob),a=document.createElement("a");
-    a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),2000);
-    $("status").textContent="PDF wurde gespeichert.";
-  }
 };
 
 </script>
@@ -1137,14 +1116,6 @@ $("share").onclick=async()=>{
       const status=document.getElementById("status");
       if(status) status.textContent="PDF zum Speichern geöffnet.";
     });
-
-    const share=document.getElementById("share");
-    if(share){
-      const sync=function(){btn.disabled=share.disabled;};
-      const observer=new MutationObserver(sync);
-      observer.observe(share,{attributes:true,attributeFilter:["disabled"]});
-      sync();
-    }
   }
 
   if(document.readyState==="loading")
