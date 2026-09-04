@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" lang="de">
+<html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
@@ -182,7 +182,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <header>
   <div class="header-top">
     <h1>Servicebericht</h1>
-    <div class="credit">Created by S. Pawlina v1.0</div>
+    <div class="credit">Created by S. Pawlina v2.0</div>
   </div>
   <div class="muted">Servicebericht auf dem iPad ausfüllen</div>
 </header>
@@ -210,10 +210,8 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <section class="card"><h2>Bemerkungen</h2><textarea id="remarks" placeholder="- Software-Update durchgeführt.&#10;- ..."></textarea></section>
 <section class="card"><h2>Ersatzteile</h2><textarea id="parts" placeholder="- ..."></textarea></section>
 
-<section class="card"><h2>Reise- und Arbeitszeit</h2>
-
-<section id="historySection" class="card" style="margin:12px 0;">
-  <div class="sectiontitle">Historie</div>
+<section id="historySection" class="card">
+  <h2>Historie</h2>
   <div class="row">
     <div class="field" style="flex:1">
       <label>Gespeicherte Berichte</label>
@@ -228,8 +226,11 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
       <button type="button" id="historyDelete" class="history-file-btn">Löschen</button>
     </div>
   </div>
-  <div class="muted">Liste wählen lädt den Bericht in der App. Öffnen wählt eine Datei in „Dateien“ (Ordner antippen). Speichern: App + Teilen → In Dateien sichern.</div>
+  <div class="muted">Liste wählen lädt den Bericht in der App. Öffnen wählt eine Datei in „Dateien“. Speichern: App + Teilen → In Dateien sichern.</div>
 </section>
+
+<section class="card"><h2>Reise- und Arbeitszeit</h2>
+
 <div id="times"></div>
 <div class="grid" style="margin-top:12px">
 <div><label>Reisezeit gesamt</label><input id="travelTotal" readonly></div>
@@ -282,7 +283,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <div id="status"></div>
 </main>
 <div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button></div>
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="./vendor/pdf-lib.min.js"></script>
 <script>
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   const k="pdf_"+el.id;
@@ -1685,6 +1686,15 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
     document.addEventListener("DOMContentLoaded",installCombined);
   else installCombined();
 })();
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("./sw.js").catch(err=>{
+      console.warn("Service Worker konnte nicht registriert werden:", err);
+    });
+  });
+}
 </script>
 
 </body>

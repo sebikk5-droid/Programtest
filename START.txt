@@ -1,21 +1,12 @@
-Servicebericht – V27.6.50
-Date fix:
-- Einsatzdatum -> PDF field „Datum Einsatzbeginn“
-- Tag 1..12 dates -> PDF fields Datum1..Datum12
-- final explicit date pass immediately before PDF serialization
-- updateFieldAppearances() remains before flatten/save
-- no changes to filename/folder/history logic
+Servicebericht – V2.0
+Created by S. Pawlina
 
-V27.6.51 – poprawka: daty dla wierszy Reise-/Arbeitszeit są pobierane z daty Tag; jeśli Tag nie ma daty, automatycznie z Einsatzdatum + numer dnia. Data trafia do obu wierszy danego dnia.
+V2.0 foundation:
+- Version marker v2.0 in header credit
+- Service Worker registered (offline / PWA)
+- pdf-lib bundled locally in vendor/ (PDF also works offline after first load)
+- Historie is its own section (not nested inside Reise- und Arbeitszeit)
+- Removed duplicate lang attribute
+- Removed old backup / test leftover files
 
-V27.6.63: continuous live-form session persistence; pageshow restores only if DOM is empty; no stale first-report overwrite; Bemerkungen unchanged from V27.6.57.
-
-V27.6.65: clean PDF return snapshot. Snapshot only at PDF generation; restore only after companies.json loads and only if the form is empty; no pageshow restoration; changing company invalidates old snapshot. PDF/Bemerkung generation logic unchanged.
-
-V27.6.66: fixed PDF button ReferenceError by removing orphaned savePdfReturnState/saveCurrentPdfReturnState calls. PDF generator logic unchanged.
-
-V27.6.67: cleaned obsolete PDF-return/sessionStorage restoration mechanism identified in V27.6.66 audit. Normal Bericht history and PDF generation retained unchanged. Backup: BACKUP_V27.6.66.zip.
-
-V27.6.69: date fix. PDF now reads each day's date specifically from .daydate[data-day], with the main date only as fallback. All other V27.6.68 logic unchanged. Backup: BACKUP_V27.6.68_BEFORE_DATE_FIX.zip.
-
-V27.6.70: fixed dates for dynamically reconstructed days and made PDF day-date lookup target the correct day box. Based on V27.6.69. PDF return/state, company selection, Bemerkung and save flow otherwise unchanged. Backup: BACKUP_V27.6.69_BEFORE_DAY_DATE_FIX.zip.
+v1.0 remains available in git history / previous main commits until this branch is merged.

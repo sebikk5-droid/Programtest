@@ -1,5 +1,12 @@
-const CACHE_NAME = "servicebericht-v27-6-64";
-const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest", "./companies.json", "./Leer.pdf"];
+const CACHE_NAME = "servicebericht-v2-0";
+const APP_SHELL = [
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./companies.json",
+  "./Leer.pdf",
+  "./vendor/pdf-lib.min.js"
+];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
