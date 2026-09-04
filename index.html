@@ -88,8 +88,8 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <header><h1>Service-Bericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
 <main><section class="card"><h2>Kunde</h2>
 <label>Firma</label><div id="customerSearchBox" style="margin:8px 0 10px;position:relative;">
-<label for="customerSearch">Kunde suchen</label>
-<input id="customerSearch" type="search" placeholder="Firma eingeben, z. B. Die" autocomplete="off" style="width:100%;">
+<label for="customerSearch">Name eingeben oder Kunde suchen</label>
+<input id="customerSearch" type="search" placeholder="Firma schreiben oder aus der Liste wählen" autocomplete="off" style="width:100%;">
 <div id="customerSearchResults" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid #bbb;border-radius:8px;max-height:240px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15);"></div>
 </div>
 <select id="company" autocomplete="off"><option value="">— Firma auswählen —</option></select>
@@ -554,6 +554,12 @@ function selectedCompany(){
   if(!Number.isInteger(i) || i<0 || !Array.isArray(companies) || !companies[i]) return null;
   return companies[i];
 }
+function firmaName(){
+  const typed=String($("customerSearch")?.value||"").trim();
+  if(typed && !typed.startsWith("—")) return typed;
+  const c=selectedCompany();
+  return c?String(c.firma||c.name||"").trim():"";
+}
 function customerRoute(){
   if(!Array.isArray(companies)) return {km:0,minutes:0};
   return parseRoute(selectedCompany());
@@ -665,6 +671,7 @@ fetch("companies.json").then(r=>{
 
     const c=selectedCompany();
     if(!c)return;
+    if($("customerSearch")) $("customerSearch").value=c.firma||c.name||"";
     const a=address(c.adres||c.address||"");
     if($("street")) $("street").value=a[0]||"";
     if($("city")) $("city").value=a[1]||"";
@@ -917,7 +924,7 @@ function pdfDateFromDay(dayNo){
   const el=box?.querySelector(".daydate");
   return el?.value || isoAddDays($("date")?.value||"", Number(dayNo)-1);
 }
-set(form,"Firma",c?(c.firma||c.name||""):"");
+set(form,"Firma",firmaName());
 setIf(form,"Straße",$("street").value);setIf(form,"PLZ, Ort",$("city").value);
 setIf(form,"Ansprechpartner",$("contact").value);
 setIf(form,"Hersteller",$("manufacturer").value);setIf(form,"Typ",$("type").value);setIf(form,"Maschinennummer",$("machineNo").value);
@@ -972,7 +979,7 @@ if(work) set(form,"Arbeitszeit gesamt",fmtMin(work));
 if(travel||work) set(form,"Gesamtzeit",fmtMin(travel+work));
 
 const pdfHasContent=!!(
-  c || r.length || p.length || km || travel || work || bet || ein || art ||
+  c || firmaName() || r.length || p.length || km || travel || work || bet || ein || art ||
   document.getElementById("maschine_ok")?.checked ||
   ["street","city","contact","manufacturer","type","machineNo","control","nc","plc","fault","hours","order","tech","customersign"]
     .some(id=>String($(id)?.value||"").trim())
@@ -1030,7 +1037,7 @@ $("share").onclick=async()=>{
 <script>
 (function(){
   const HISTORY_KEY="servicebericht_history_v26";
-  const SKIP_IDS={historySelect:1,customerSearch:1,travelTotal:1,workTotal:1,kmTotal:1,allTotal:1};
+  const SKIP_IDS={historySelect:1,travelTotal:1,workTotal:1,kmTotal:1,allTotal:1};
 
   function loadHistory(){
     try { return JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]"); }
@@ -1123,7 +1130,7 @@ $("share").onclick=async()=>{
 
     const company=document.getElementById("company");
     const search=document.getElementById("customerSearch");
-    if(company && search && company.selectedOptions[0])
+    if(company && search && company.value!=="" && company.selectedOptions[0])
       search.value=company.selectedOptions[0].textContent.trim();
 
     document.querySelectorAll("[data-daybox]").forEach(box=>{
@@ -1163,6 +1170,8 @@ $("share").onclick=async()=>{
     if(prev!=="" && list[Number(prev)]) sel.value=prev;
   }
   function defaultName(){
+    const typed=(document.getElementById("customerSearch")?.value||"").trim();
+    if(typed && !typed.startsWith("—")) return typed;
     const company=document.getElementById("company");
     const name=(company?.selectedOptions?.[0]?.textContent||"").trim();
     return name && !name.startsWith("—") ? name : "Servicebericht";
@@ -1375,6 +1384,13 @@ $("share").onclick=async()=>{
       select.dispatchEvent(new Event("change",{bubbles:true}));
     }
 
+    function clearListIfManual(){
+      const typed=input.value.trim();
+      const current=select.selectedOptions[0];
+      if(current && current.value!=="" && current.textContent.trim()!==typed)
+        select.value="";
+    }
+
     function show(){
       const q=input.value.trim().toLocaleLowerCase("de-DE");
       results.innerHTML="";
@@ -1386,7 +1402,7 @@ $("share").onclick=async()=>{
 
       if(!options.length){
         const empty=document.createElement("div");
-        empty.textContent="Keine Firma gefunden";
+        empty.textContent="Kein Treffer – der eingegebene Name wird ins PDF übernommen.";
         empty.style.padding="10px";
         empty.style.color="#777";
         results.appendChild(empty);
@@ -1414,7 +1430,10 @@ $("share").onclick=async()=>{
       results.style.display="block";
     }
 
-    input.addEventListener("input",show);
+    input.addEventListener("input",function(){
+      clearListIfManual();
+      show();
+    });
     input.addEventListener("focus",function(){
       if(input.value.trim()) show();
     });
