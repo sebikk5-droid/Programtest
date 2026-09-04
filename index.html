@@ -300,9 +300,18 @@ $("addDay").onclick=()=>{
    if(newDayDate && !newDayDate.value) newDayDate.value=isoAddDays($("date")?.value||"",d-1);
   visibleDays=d;
   bindTimeInputs();
-  applyCustomerRouteDay(d);
-  bindTimeInputs();
-  recalcDayNet(d);
+
+  // Same automatic customer data as day 1.
+  const r=customerRoute();
+  const kmOut=box?.querySelector(`[data-k="Kilometer${d*2-1}"]`);
+  const kmBack=box?.querySelector(`[data-k="Kilometer${d*2}"]`);
+  const pause=box?.querySelector(`[data-k="PauseRZ${d*2}"]`);
+  if(r.km){
+    if(kmOut)kmOut.value=r.km;
+    if(kmBack)kmBack.value=r.km;
+  }
+  if(pause && pause.value==="")pause.value="0";
+
   recalcTimes();
   if(visibleDays>=6)$("addDay").style.display="none";
 };
@@ -318,8 +327,7 @@ document.getElementById("times").addEventListener("change",function(e){
   const row=parseInt(m[2],10);
   const d=Math.ceil(row/2);
   const outRow=d*2-1, backRow=d*2;
-  const box=document.querySelector(`[data-daybox="${d}"]`);
-  const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
+  const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
   const r=customerRoute();
   if(!r.minutes) return;
 
@@ -531,59 +539,6 @@ function applyCustomerRouteDay1(){
   }
   recalcTimes();
 }
-function applyCustomerRouteDay(d){
-  const r=customerRoute();
-  const box=document.querySelector(`[data-daybox="${d}"]`);
-  if(!box) return;
-
-  const outRow=2*d-1, backRow=2*d;
-  const field=(name,n)=>box.querySelector(`[data-k="${name}${n}"]`);
-  const calc=(name)=>box.querySelector(`[data-calc="${name}${d}"]`);
-
-  const kmOut=field("Kilometer",outRow);
-  const kmBack=field("Kilometer",backRow);
-  if(r.km){
-    if(kmOut) kmOut.value=r.km;
-    if(kmBack) kmBack.value=r.km;
-  }
-
-  const outOverride=box.querySelector('[data-route-override="out"]');
-  const backOverride=box.querySelector('[data-route-override="back"]');
-  const pauseOut=field("PauseRZ",outRow);
-  const pauseBack=field("PauseRZ",backRow);
-
-  const outMinutes=(outOverride && String(outOverride.value).trim()!=="")
-    ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
-  const backMinutes=(backOverride && String(backOverride.value).trim()!=="")
-    ? Math.max(0,parseInt(backOverride.value,10)||0) : r.minutes;
-
-  // Same anchor logic as Tag 1, only with this day's field numbers.
-  const a1=field("RZstart",outRow),a2=field("RZende",outRow);
-  if(a1&&a2&&outMinutes>0){
-    if(a2.value) a1.value=addMinutesToTime(a2.value,-outMinutes);
-    else if(a1.value) a2.value=addMinutesToTime(a1.value,outMinutes);
-  }
-
-  const b1=field("RZstart",backRow),b2=field("RZende",backRow);
-  const pauseMin=pauseBack ? pauseMinutes(pauseBack.value||"0") : 0;
-  if(b1&&b2&&backMinutes>0){
-    if(b2.value) b1.value=addMinutesToTime(b2.value,-(backMinutes+pauseMin));
-    else if(b1.value) b2.value=addMinutesToTime(b1.value,backMinutes+pauseMin);
-  }
-
-  // The decisive part: customer-list time is the initial net travel time,
-  // exactly as Tag 1 does. If the user entered a manual override, use it.
-  const netOut=Math.max(0,outMinutes-pauseMinutes(pauseOut?.value||"0"));
-  const netBack=Math.max(0,backMinutes-pauseMin);
-  const rt=calc("rt"), rr=calc("rr");
-  if(rt) rt.value=fmtMin(netOut);
-  if(rr) rr.value=fmtMin(netBack);
-
-  const info=box.querySelector(`#routeInfo${d}`);
-  if(info) info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Rückfahrt: ${fmtMin(r.minutes)} + 45 Min Pause.`;
-
-  recalcTimes();
-}
 fetch("companies.json").then(r=>{
   if(!r.ok) throw new Error("companies.json HTTP "+r.status);
   return r.json();
@@ -602,9 +557,14 @@ fetch("companies.json").then(r=>{
     if($("street")) $("street").value=a[0]||"";
     if($("city")) $("city").value=a[1]||"";
     applyCustomerRouteDay1();
-    for(let d=2;d<=visibleDays;d++) {
-      applyCustomerRouteDay(d);
-      recalcDayNet(d);
+    for(let d=2;d<=visibleDays;d++){
+      const box=document.querySelector(`[data-daybox="${d}"]`);
+      const a=box?.querySelector(`[data-k="Kilometer${d*2-1}"]`);
+      const b=box?.querySelector(`[data-k="Kilometer${d*2}"]`);
+      const p=box?.querySelector(`[data-k="PauseRZ${d*2}"]`);
+      const r=customerRoute();
+      if(r.km){if(a)a.value=r.km;if(b)b.value=r.km;}
+      if(p)p.value="45";
     }
     recalcTimes();
   };
@@ -640,59 +600,52 @@ function getActiveDays(){
     .filter(Number.isFinite)
     .sort((a,b)=>a-b);
 }
-function recalcDayNet(d){
-  const box=document.querySelector(`[data-daybox="${d}"]`);
-  if(!box) return;
-  const r=customerRoute();
-  const out=box.querySelector('[data-route-override="out"]');
-  const back=box.querySelector('[data-route-override="back"]');
-  const po=box.querySelector(`[data-k="PauseRZ${2*d-1}"]`);
-  const pb=box.querySelector(`[data-k="PauseRZ${2*d}"]`);
-  const outMin=(out&&String(out.value).trim()!=="")?Math.max(0,parseInt(out.value,10)||0):r.minutes;
-  const backMin=(back&&String(back.value).trim()!=="")?Math.max(0,parseInt(back.value,10)||0):r.minutes;
-  const rt=box.querySelector(`[data-calc="rt${d}"]`);
-  const rr=box.querySelector(`[data-calc="rr${d}"]`);
-  if(rt)rt.value=fmtMin(Math.max(0,outMin-pauseMinutes(po?.value||"0")));
-  if(rr)rr.value=fmtMin(Math.max(0,backMin-pauseMinutes(pb?.value||"0")));
-}
 function recalcTimes(){
   let travel=0,work=0,km=0;
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
+    const q=k=>document.querySelector(`[data-k="${k}"]`)||{value:""};
+
     const box=document.querySelector(`[data-daybox="${d}"]`);
-    if(!box) continue;
-    recalcDayNet(d);
-    const q=k=>box.querySelector(`[data-k="${k}"]`)||{value:""};
-    const calc=k=>box.querySelector(`[data-calc="${k}"]`);
-    const overrideOut=box.querySelector('[data-route-override="out"]');
-    const overrideBack=box.querySelector('[data-route-override="back"]');
-    const route=customerRoute();
-    const pauseOut=pauseMinutes(q(`PauseRZ${a}`).value||"0");
-    const pauseBack=pauseMinutes(q(`PauseRZ${b}`).value||"0");
-    const manualOut=overrideOut && String(overrideOut.value).trim()!=="" ? Math.max(0,parseInt(overrideOut.value,10)||0) : null;
-    const manualBack=overrideBack && String(overrideBack.value).trim()!=="" ? Math.max(0,parseInt(overrideBack.value,10)||0) : null;
-    const outClock=minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value);
-    const backClock=minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value);
-    const rtBase=manualOut!==null ? manualOut : (route.minutes||0);
-    const rrBase=manualBack!==null ? manualBack : (route.minutes||0);
-    const rtClock=outClock>0 || (q(`RZstart${a}`).value&&q(`RZende${a}`).value);
-    const rrClock=backClock>0 || (q(`RZstart${b}`).value&&q(`RZende${b}`).value);
-    const rt=Math.max(0,(rtClock?outClock:rtBase)-pauseOut);
-    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value||"0"));
-    const rr=Math.max(0,(rrClock?backClock:rrBase)-pauseBack);
-    const elRt=calc(`rt${d}`),elWt=calc(`wt${d}`),elWt2=calc(`wt2${d}`),elRr=calc(`rr${d}`),elTotal=calc(`total${d}`);
-    if(elRt)elRt.value=fmtMin(rt);
-    if(elWt)elWt.value=fmtMin(wt);
-    if(elWt2)elWt2.value=fmtMin(wt);
-    if(elRr)elRr.value=fmtMin(rr);
-    if(elTotal)elTotal.value=fmtMin(rt+rr+wt);
+    const overrideOut=box?.querySelector('[data-route-override="out"]');
+    const overrideBack=box?.querySelector('[data-route-override="back"]');
+    const routeBase=customerRoute();
+    const outMinutes=(overrideOut && overrideOut.value!=="")
+      ? Math.max(0,parseInt(overrideOut.value,10)||0) : routeBase.minutes;
+    const backMinutes=(overrideBack && overrideBack.value!=="")
+      ? Math.max(0,parseInt(overrideBack.value,10)||0) : routeBase.minutes;
+
+    const rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseMinutes(q(`PauseRZ${a}`).value));
+    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
+    const rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseMinutes(q(`PauseRZ${b}`).value));
     travel+=rt+rr; work+=wt;
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
+
+    const sc=(name,val)=>{const el=document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
+    sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
+
+    if(box){
+      box.dataset.routeOutMinutes=String(outMinutes);
+      box.dataset.routeBackMinutes=String(backMinutes);
+    }
   }
-  const t=document.querySelector('[data-total="travel"]'),w=document.querySelector('[data-total="work"]'),k=document.querySelector('[data-total="km"]');
-  if(t)t.value=fmtMin(travel); if(w)w.value=fmtMin(work); if(k)k.value=String(Math.round(km*10)/10);
+  if($("travelTotal"))$("travelTotal").value=fmtMin(travel);
+  if($("workTotal"))$("workTotal").value=fmtMin(work);
+  if($("kmTotal"))$("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
+  if($("allTotal"))$("allTotal").value=fmtMin(travel+work);
 }
+
+// Auswahlfelder: innerhalb jeder Gruppe nur eine Option gleichzeitig.
+document.querySelectorAll('#choices input[type="checkbox"][name]').forEach(cb=>{
+  cb.addEventListener('change',()=>{
+    if(cb.checked){
+      document.querySelectorAll('#choices input[name="'+cb.name+'"]').forEach(x=>{
+        if(x!==cb) x.checked=false;
+      });
+    }
+  });
+});
 function pdfCheck(form,name,on){
   try{
     const f=form.getCheckBox(name);
@@ -713,7 +666,7 @@ function bindTimeInputs(){
       // Reisezeit-Ändern has no data-k, therefore the day comes from its daybox.
       const d=row?Math.ceil(row/2):(Number.isFinite(boxDay)?boxDay:1);
       const outRow=d*2-1,backRow=d*2;
-      const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
+      const field=(name,n)=>document.querySelector(`[data-k="${name}${n}"]`);
       const r=customerRoute();
 
       // EXACTLY the day-1 "Reisezeit ändern" behavior, scoped to this day.
@@ -749,9 +702,7 @@ function bindTimeInputs(){
           const azEnd=field("AZende",outRow);
           if(azEnd&&b1?.value&&azEnd.dataset.manual!=="1")azEnd.value=b1.value;
         }
-        recalcDayNet(d);
-        recalcTimes();
-        return;
+        recalcTimes(); return;
       }
 
       // EXACTLY the day-1 travel pair logic, for any day.
@@ -1044,9 +995,6 @@ $("share").onclick=async()=>{
     });
 
     bindTimeInputs();
-    // Initialize customer route for every recreated day, exactly like Add Day.
-    // This is required because applyForm rebuilds day boxes from scratch.
-    for(let d=2; d<=visibleDays; d++) applyCustomerRouteDay(d);
     if(typeof recalcTimes==="function") recalcTimes();
   }
   function refresh(){
@@ -1371,7 +1319,7 @@ $("share").onclick=async()=>{
 <script>
 (function(){
   function setupSaveAsPdf(){
-    const btn=null;
+    const btn=document.getElementById("savePdf");
     if(!btn || btn.dataset.saveasBound==="1") return;
     btn.dataset.saveasBound="1";
 
