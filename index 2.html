@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Service Bericht">
+<meta name="apple-mobile-web-app-title" content="Servicebericht">
 <meta name="apple-touch-fullscreen" content="yes">
 <meta name="theme-color" content="#ffffff">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Service Bericht</title>
+<title>Servicebericht</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f2f2f7;color:#111;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
 header{background:#fff;padding:calc(12px + env(safe-area-inset-top)) 18px 14px;border-bottom:1px solid #ddd;position:sticky;top:0;z-index:4}
@@ -84,7 +84,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </style>
 </head>
 <body>
-<header><h1>Service-Bericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
+<header><h1>Servicebericht</h1><div class="muted">Servicebericht auf dem iPad ausfüllen</div></header>
 <main><section class="card"><h2>Kunde</h2>
 <label>Firma</label><div id="customerSearchBox" style="margin:8px 0 10px;position:relative;">
 <label for="customerSearch">Kunde suchen</label>
@@ -828,11 +828,11 @@ $("status").textContent="Fertig – das PDF ist vorbereitet. Klicken Sie auf „
 };
 $("share").onclick=async()=>{
   if(!lastPdfBlob){$("status").textContent="Najpierw kliknij „PDF erstellen”.";return;}
-  const filename="Service-Bericht.pdf";
+  const filename="Servicebericht.pdf";
   try{
     const file=new File([lastPdfBlob],filename,{type:"application/pdf"});
     if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
-      await navigator.share({files:[file],title:"Service-Bericht"});
+      await navigator.share({files:[file],title:"Servicebericht"});
       $("status").textContent="PDF wurde geteilt.";
     }else{
       const url=URL.createObjectURL(lastPdfBlob),a=document.createElement("a");
@@ -1099,7 +1099,7 @@ $("share").onclick=async()=>{
         return;
       }
 
-      const defaultName="Service-Bericht.pdf";
+      const defaultName="Servicebericht.pdf";
 
       try{
         if(window.showSaveFilePicker){
