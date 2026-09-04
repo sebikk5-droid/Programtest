@@ -1254,6 +1254,10 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
 
     bindTimeInputs();
     if(typeof recalcTimes==="function") recalcTimes();
+    document.querySelectorAll("#choices input[type=checkbox]").forEach(el=>{
+      const label=el.closest(".choice-opt");
+      if(label) label.classList.toggle("is-on", !!el.checked);
+    });
   }
   function historyItemData(item){
     if(!item || typeof item!=="object") return null;
