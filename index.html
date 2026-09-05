@@ -1086,7 +1086,7 @@ function pdfDateFromDay(dayNo){
   const el=box?.querySelector(".daydate");
   return el?.value || isoAddDays($("date")?.value||"", Number(dayNo)-1);
 }
-set(form,"Firma",firmaName());
+setFit(form,"Firma",firmaName(),8);
 setIf(form,"Straße",$("street").value);setIf(form,"PLZ, Ort",$("city").value);
 setIf(form,"Ansprechpartner",$("contact").value);
 setIf(form,"Hersteller",$("manufacturer").value);setIf(form,"Typ",$("type").value);setIf(form,"Maschinennummer",$("machineNo").value);
