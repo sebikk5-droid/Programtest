@@ -1074,7 +1074,7 @@ function syncVisibleDaysFromDOM(){
 }
 function recalcTimes(){
   syncVisibleDaysFromDOM();
-  let travel=0,work=0,km=0;
+  let travel=0,work=0,km=0,pauses=0;
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
     const box=dayBoxEl(d);
@@ -1083,6 +1083,7 @@ function recalcTimes(){
     const backOverride=box?.querySelector('[data-route-override="back"]');
 
     const pauseOut=pauseMinutes(q(`PauseRZ${a}`).value);
+    const pauseWork=pauseMinutes(q(`PauseAZ${a}`).value);
     const pauseBack=pauseMinutes(q(`PauseRZ${b}`).value);
 
     let rt;
@@ -1099,19 +1100,20 @@ function recalcTimes(){
       rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack);
     }
 
-    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
+    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseWork);
 
-    travel+=rt+rr; work+=wt;
+    travel+=rt+rr; work+=wt; pauses+=pauseOut+pauseWork+pauseBack;
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
 
     const sc=(name,val)=>{const el=box?.querySelector(`[data-calc="${name}"]`)||document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
+    // Day "Gesamtzeit netto" stays without pauses; bottom Gesamtzeit includes them.
     sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
   }
   if($("travelTotal"))$("travelTotal").value=fmtMin(travel);
   if($("workTotal"))$("workTotal").value=fmtMin(work);
   if($("kmTotal"))$("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
-  if($("allTotal"))$("allTotal").value=fmtMin(travel+work);
+  if($("allTotal"))$("allTotal").value=fmtMin(travel+work+pauses);
 }
 // Auswahlfelder: innerhalb jeder Gruppe nur eine Option gleichzeitig.
 function syncChoiceVisual(el){
@@ -1304,7 +1306,7 @@ const remarkLines=typeof remarkLinesForPdf==="function"
   : String($("remarks").value||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
 for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,"");
 let p=ls($("parts").value);for(let i=1;i<=4;i++)setIf(form,"Ersatzteile "+i,p[i-1]||"");
-let km=0, travel=0, work=0;
+let km=0, travel=0, work=0, pauses=0;
 const dayBoxes=[...document.querySelectorAll("[data-daybox]")];
 for(let d=1;d<=dayBoxes.length;d++){
   const box=dayBoxes[d-1];
@@ -1343,12 +1345,13 @@ for(let d=1;d<=dayBoxes.length;d++){
   if(rr) setFit(form,`RZ${b}`,fmtMinPdf(rr),7);
   km+=(parseFloat((kmA||"").replace(",","."))||0);
   km+=(parseFloat((kmB||"").replace(",","."))||0);
-  travel+=rt+rr;work+=wt;
+  travel+=rt+rr;work+=wt;pauses+=pauseOut+pauseWork+pauseBack;
 }
 if(km) setFit(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","),8);
 if(travel) setFit(form,"Reisezeit gesamt",fmtMinPdf(travel),8);
 if(work) setFit(form,"Arbeitszeit gesamt",fmtMinPdf(work),8);
-if(travel||work) setFit(form,"Gesamtzeit",fmtMinPdf(travel+work),8);
+// Gesamtzeit = Reise + Arbeit + alle Pausen
+if(travel||work||pauses) setFit(form,"Gesamtzeit",fmtMinPdf(travel+work+pauses),8);
 
 const pdfHasContent=!!(
   c || firmaName() || remarkLines.length || p.length || km || travel || work || bet || ein || art ||
