@@ -246,7 +246,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <div><label>Kilometer gesamt</label><input id="kmTotal" readonly></div>
 <div><label>Gesamtzeit</label><input id="allTotal" readonly></div>
 </div>
-<div class="muted">Jeden Tag werden zwei Zeilen im Bericht verwendet: 1. Anfahrt + Arbeit, 2. Rückfahrt. Pausen werden automatisch abgezogen.</div></section>
+<div class="muted">Jeden Tag werden zwei Zeilen im Bericht verwendet: 1. Anfahrt + Arbeit, 2. Rückfahrt. Reisezeit/Arbeitszeit sind netto; Gesamtzeit enthält alle Pausen.</div></section>
 
 <section id="choices" class="card">
   <h2>Auswahl</h2>
@@ -566,7 +566,7 @@ function dayTemplate(d){
     </div>
     <div class="row">
       <div class="field"><label>KM Rückfahrt</label><input type="number" inputmode="decimal" step="0.1" data-k="Kilometer${d*2}" placeholder="KM Rückfahrt"></div>
-      <div class="field"><label>Gesamtzeit netto</label><input type="text" data-calc="total${d}" readonly></div>
+      <div class="field"><label>Gesamtzeit</label><input type="text" data-calc="total${d}" readonly></div>
     </div>
     <div class="muted" id="routeInfo${d}">${d===1?"Nach Auswahl der Firma übernimmt Tag 1 km und Reisezeit aus der Kundenliste.":"km für diesen Tag manuell eintragen. Reise- und Arbeitszeit werden automatisch berechnet."}</div>
     </div>
@@ -1129,13 +1129,14 @@ function recalcTimes(){
 
     const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseWork);
 
-    travel+=rt+rr; work+=wt; pauses+=pauseOut+pauseWork+pauseBack;
+    const dayPauses=pauseOut+pauseWork+pauseBack;
+    travel+=rt+rr; work+=wt; pauses+=dayPauses;
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
 
     const sc=(name,val)=>{const el=box?.querySelector(`[data-calc="${name}"]`)||document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
-    // Day "Gesamtzeit netto" stays without pauses; bottom Gesamtzeit includes them.
-    sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
+    // Reise/Arbeit bleiben netto; Gesamtzeit (Tag + unten) inkl. aller Pausen.
+    sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr+dayPauses);
   }
   if($("travelTotal"))$("travelTotal").value=fmtMin(travel);
   if($("workTotal"))$("workTotal").value=fmtMin(work);
