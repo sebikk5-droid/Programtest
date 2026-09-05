@@ -213,7 +213,10 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <div class="full"><label>Betriebsstunden</label><input id="hours"></div>
 </div></section>
 
-<section class="card"><h2>Bemerkungen</h2><textarea id="remarks" placeholder="- Software-Update durchgeführt.&#10;- ..."></textarea></section>
+<section class="card"><h2>Bemerkungen</h2>
+<textarea id="remarks" placeholder="- Software-Update durchgeführt.&#10;- ..." rows="7"></textarea>
+<div class="muted" id="remarksHint" style="margin-top:6px">Lange Zeilen werden automatisch umgebrochen (max. 7 Zeilen · Zeile 1: 90 Zeichen, danach 100), passend zum PDF.</div>
+</section>
 <section class="card"><h2>Ersatzteile</h2><textarea id="parts" placeholder="- ..."></textarea></section>
 
 <section class="card"><h2>Reise- und Arbeitszeit</h2>
@@ -298,6 +301,66 @@ document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   try{el.value=localStorage.getItem(k)||"";}catch(e){}
   el.addEventListener("input",()=>{try{localStorage.setItem(k,el.value);}catch(e){}});
 });
+
+// Bemerkungen: same line limits as the PDF line boxes (Helvetica ~9pt).
+// Line 1 is shorter because the label sits on the left of that row.
+const REMARK_LINE_LIMITS=[90,100,100,100,100,100,100];
+const REMARK_MAX_LINES=REMARK_LINE_LIMITS.length;
+function wrapRemarkText(raw){
+  const parts=String(raw||"").replace(/\r\n/g,"\n").split("\n");
+  const out=[];
+  for(let pi=0;pi<parts.length && out.length<REMARK_MAX_LINES;pi++){
+    let rest=parts[pi];
+    if(rest.length===0){
+      if(out.length<REMARK_MAX_LINES) out.push("");
+      continue;
+    }
+    while(out.length<REMARK_MAX_LINES){
+      const limit=REMARK_LINE_LIMITS[out.length];
+      if(rest.length<=limit){ out.push(rest); break; }
+      let cut=limit;
+      const slice=rest.slice(0,limit);
+      const sp=slice.lastIndexOf(" ");
+      if(sp>=Math.ceil(limit*0.4)) cut=sp;
+      out.push(rest.slice(0,cut).replace(/\s+$/,""));
+      rest=rest.slice(cut).replace(/^\s+/,"");
+      if(!rest) break;
+    }
+  }
+  return out.slice(0,REMARK_MAX_LINES).join("\n");
+}
+function remarkLinesForPdf(raw){
+  return wrapRemarkText(raw).split("\n").map(x=>x.trim()).filter(Boolean).slice(0,REMARK_MAX_LINES);
+}
+(function setupRemarksAutoWrap(){
+  const el=document.getElementById("remarks");
+  if(!el || el.dataset.wrapBound==="1") return;
+  el.dataset.wrapBound="1";
+  let busy=false;
+  try{
+    const saved=localStorage.getItem("pdf_remarks");
+    if(saved!=null && String(el.value||"").trim()==="") el.value=saved;
+  }catch(e){}
+  function applyWrap(){
+    if(busy) return;
+    const before=el.value;
+    const cursor=el.selectionStart??before.length;
+    const wrapped=wrapRemarkText(before);
+    if(wrapped===before) return;
+    busy=true;
+    const prefix=wrapRemarkText(before.slice(0,cursor));
+    el.value=wrapped;
+    const pos=Math.min(prefix.length, wrapped.length);
+    try{ el.setSelectionRange(pos,pos); }catch(e){}
+    try{ localStorage.setItem("pdf_remarks", wrapped); }catch(e){}
+    busy=false;
+  }
+  el.addEventListener("input", applyWrap);
+  el.addEventListener("blur", applyWrap);
+  // Reflow any restored text once.
+  if(el.value) applyWrap();
+  window.__sbWrapRemarks=applyWrap;
+})();
 
 // Auswahl bleibt auf diesem Gerät gespeichert.
 document.querySelectorAll('#choices input').forEach(el=>{
@@ -1190,7 +1253,9 @@ setIf(form,"Name Servicetechniker",$("tech").value);
 setIf(form,"Name Unterschrift Kunde",$("customersign").value);
 // Bemerkungen are drawn after flatten (see below). Leave the AcroForm
  // fields empty so a fixed appearance cannot overflow the line frames again.
-const remarkLines=String($("remarks").value||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+const remarkLines=typeof remarkLinesForPdf==="function"
+  ? remarkLinesForPdf($("remarks").value||"")
+  : String($("remarks").value||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
 for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,"");
 let p=ls($("parts").value);for(let i=1;i<=4;i++)setIf(form,"Ersatzteile "+i,p[i-1]||"");
 let km=0, travel=0, work=0;
@@ -1418,6 +1483,7 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
 
     bindTimeInputs();
     if(typeof recalcTimes==="function") recalcTimes();
+    if(typeof window.__sbWrapRemarks==="function") window.__sbWrapRemarks();
     document.querySelectorAll("#choices input[type=checkbox]").forEach(el=>{
       const label=el.closest(".choice-opt");
       if(label) label.classList.toggle("is-on", !!el.checked);
