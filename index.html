@@ -310,11 +310,14 @@ document.querySelectorAll('#choices input').forEach(el=>{
 </script>
 <script>
 const $=id=>document.getElementById(id); let companies=[]; let lastPdfBlob=null;
+let companiesReady=false;
 
 // V27.6.65 — PDF return state
 // Save the exact live report immediately before PDF generation.
 // Restore it only after a real page reload/recreation AND only if the
 // form is empty. This never overwrites a live Safari-restored report.
+// Wait until companies.json has populated the Firma select so the
+// restored company index is not wiped by rebuilding <option>s.
 const PDF_RETURN_KEY="servicebericht_pdf_return_v1";
 function savePdfReturnState(){
   try{
@@ -339,14 +342,30 @@ function formLooksEmptyForRestore(){
 }
 function restorePdfReturnStateIfNeeded(){
   try{
+    if(!companiesReady) return false;
     const raw=sessionStorage.getItem(PDF_RETURN_KEY);
     if(!raw) return false;
-    if(!formLooksEmptyForRestore()) return false;
     if(typeof window.__sbApplyForm!=="function") return false;
     const data=JSON.parse(raw);
     if(!data || typeof data!=="object") return false;
-    window.__sbApplyForm(data);
-    return true;
+
+    // Full restore only on an empty recreated page.
+    if(formLooksEmptyForRestore()){
+      window.__sbApplyForm(data);
+      return true;
+    }
+
+    // If the form was restored earlier but the Firma <select> was rebuilt
+    // afterwards, re-apply only the company selection from the snapshot.
+    const companyEl=$("company");
+    if(companyEl && !companyEl.value && data.company!=null && String(data.company)!==""){
+      companyEl.value=String(data.company);
+      const search=$("customerSearch");
+      if(search && companyEl.selectedOptions[0])
+        search.value=companyEl.selectedOptions[0].textContent.trim();
+      return true;
+    }
+    return false;
   }catch(e){ return false; }
 }
 window.addEventListener("pageshow",()=>{ restorePdfReturnStateIfNeeded(); });
@@ -835,8 +854,10 @@ fetch("companies.json").then(r=>{
   return r.json();
 }).then(x=>{
   companies=Array.isArray(x)?x:[];
+  const prevCompany=$("company")?.value||"";
   $("company").innerHTML='<option value="">— Firma auswählen —</option>'+
     companies.map((c,i)=>`<option value="${i}">${c.firma||c.name||"Firma "+(i+1)}</option>`).join("");
+  if(prevCompany) $("company").value=prevCompany;
   $("company").onchange=()=>{
     // V27.6.51 FIX: after returning from a PDF, the previous report is kept
     // in sessionStorage for Safari. Choosing another company must invalidate
@@ -853,6 +874,7 @@ fetch("companies.json").then(r=>{
     for(let d=2;d<=visibleDays;d++) applyCustomerRouteDay(d);
     recalcTimes();
   };
+  companiesReady=true;
   // If Safari recreated the document and the form is genuinely empty,
   // restore the report captured immediately before PDF generation.
   restorePdfReturnStateIfNeeded();
@@ -860,6 +882,7 @@ fetch("companies.json").then(r=>{
 }).catch(err=>{
   console.error("companies.json:",err);
   $("company").innerHTML='<option value="">Fehler beim Laden der Firmen</option>';
+  companiesReady=true;
   restorePdfReturnStateIfNeeded();
 });
 
