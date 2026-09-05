@@ -290,7 +290,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 <div id="status"></div>
 </main>
-<div class="bottom"><button class="clear" onclick="location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button></div>
+<div class="bottom"><button class="clear" onclick="try{sessionStorage.removeItem('servicebericht_pdf_return_v1')}catch(e){};location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
@@ -315,6 +315,46 @@ const $=id=>document.getElementById(id); let companies=[]; let lastPdfBlob=null;
 // Save the exact live report immediately before PDF generation.
 // Restore it only after a real page reload/recreation AND only if the
 // form is empty. This never overwrites a live Safari-restored report.
+const PDF_RETURN_KEY="servicebericht_pdf_return_v1";
+function savePdfReturnState(){
+  try{
+    if(typeof window.__sbCollectForm!=="function") return;
+    sessionStorage.setItem(PDF_RETURN_KEY, JSON.stringify(window.__sbCollectForm()));
+  }catch(e){}
+}
+function clearPdfReturnState(){
+  try{ sessionStorage.removeItem(PDF_RETURN_KEY); }catch(e){}
+}
+function formLooksEmptyForRestore(){
+  const ids=["customerSearch","street","city","contact","manufacturer","type","machineNo","tech","fault","hours"];
+  if(ids.some(id=>String($(id)?.value||"").trim())) return false;
+  if($("company")?.value) return false;
+  if(document.querySelector("#choices input:checked")) return false;
+  if(document.querySelector('[data-k^="RZstart"]')?.value) return false;
+  if(document.querySelector('[data-k^="AZstart"]')?.value) return false;
+  if(document.querySelector('[data-k^="PauseRZ"]')?.value) return false;
+  if(document.querySelector('[data-k^="Kilometer"]')?.value) return false;
+  if(document.querySelector("[data-daybox]:not([data-daybox='1'])")) return false;
+  return true;
+}
+function restorePdfReturnStateIfNeeded(){
+  try{
+    const raw=sessionStorage.getItem(PDF_RETURN_KEY);
+    if(!raw) return false;
+    if(!formLooksEmptyForRestore()) return false;
+    if(typeof window.__sbApplyForm!=="function") return false;
+    const data=JSON.parse(raw);
+    if(!data || typeof data!=="object") return false;
+    window.__sbApplyForm(data);
+    return true;
+  }catch(e){ return false; }
+}
+window.addEventListener("pageshow",()=>{ restorePdfReturnStateIfNeeded(); });
+window.addEventListener("pagehide",()=>{
+  // Keep a fresh snapshot if the user leaves after preparing a PDF
+  // (Safari may recreate the document on return).
+  if(lastPdfBlob) savePdfReturnState();
+});
 
 const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signdate").value=today;
 
@@ -507,6 +547,8 @@ document.getElementById("times").addEventListener("change",function(e){
 
   const a1=field("RZstart",outRow), a2=field("RZende",outRow);
   const b1=field("RZstart",backRow), b2=field("RZende",backRow);
+  const pauseOut=field("PauseRZ",outRow);
+  const pauseOutMin=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
   const pause=field("PauseRZ",backRow);
   const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
 
@@ -515,8 +557,9 @@ document.getElementById("times").addEventListener("change",function(e){
     el.removeAttribute("data-manual");
 
     if(row===outRow && a1 && a2 && outMin){
-      if(el===a2 && a1.value) a2.value=addMinutesToTime(a1.value,outMin);
-      else if(el===a1 && a2.value) a1.value=addMinutesToTime(a2.value,-outMin);
+      const duration=outMin+pauseOutMin;
+      if(el===a2 && a1.value) a2.value=addMinutesToTime(a1.value,duration);
+      else if(el===a1 && a2.value) a1.value=addMinutesToTime(a2.value,-duration);
     }
 
     if(row===backRow && b1 && b2 && backMin){
@@ -530,8 +573,9 @@ document.getElementById("times").addEventListener("change",function(e){
   }
 
   if(row===outRow && outMin){
-    if(el===a1 && a1.value) a2.value=addMinutesToTime(a1.value,outMin);
-    else if(el===a2 && a2.value) a1.value=addMinutesToTime(a2.value,-outMin);
+    const duration=outMin+pauseOutMin;
+    if(el===a1 && a1.value) a2.value=addMinutesToTime(a1.value,duration);
+    else if(el===a2 && a2.value) a1.value=addMinutesToTime(a2.value,-duration);
 
     const az=field("AZstart",outRow);
     if(az && a2.value && az.dataset.manual!=="1") az.value=a2.value;
@@ -707,14 +751,17 @@ function applyCustomerRouteDay1(){
     const outTime=outOverride && outOverride.value!=="" ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
     const backTime=backOverride && backOverride.value!=="" ? Math.max(0,parseInt(backOverride.value,10)||0) : r.minutes;
 
-    // Anfahrt: Listenzeit oder manuell geänderte Zeit.
+    // Anfahrt: Listenzeit/manuelle Zeit + Pause während Fahrt.
+    // Pause verlängert die Uhrzeiten, Reisezeit netto bleibt die reine Fahrzeit.
+    const pauseOut=document.querySelector('[data-k="PauseRZ1"]');
+    const pauseOutMin=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
+    const anfahrtGesamt=outTime+pauseOutMin;
     if(a1 && a2){
-      if(a2.value) a1.value=addMinutesToTime(a2.value,-outTime);
-      else if(a1.value) a2.value=addMinutesToTime(a1.value,outTime);
+      if(a2.value) a1.value=addMinutesToTime(a2.value,-anfahrtGesamt);
+      else if(a1.value) a2.value=addMinutesToTime(a1.value,anfahrtGesamt);
     }
 
-    // Rückfahrt: Listenzeit/manuelle Zeit + die im Feld Pause Reisezeit
-    // eingetragene Pause.
+    // Rückfahrt: Listenzeit/manuelle Zeit + Pause während Rückfahrt.
     const pauseMin=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
     const rueckfahrtGesamt=backTime+pauseMin;
     if(b1 && b2){
@@ -725,8 +772,10 @@ function applyCustomerRouteDay1(){
 
   const info=document.getElementById("routeInfo1");
   if(info){
+    const pauseOutEl=document.querySelector('[data-k="PauseRZ1"]');
+    const pauseOutShown=pauseOutEl ? pauseMinutes(pauseOutEl.value||"0") : 0;
     const pauseShown=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
-    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Rückfahrt: ${fmtMin(r.minutes)} + ${pauseShown} Min Pause.`;
+    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Anfahrt: ${fmtMin(r.minutes)} + ${pauseOutShown} Min Pause. Rückfahrt: ${fmtMin(r.minutes)} + ${pauseShown} Min Pause.`;
   }
   recalcTimes();
 }
@@ -747,6 +796,7 @@ function applyCustomerRouteDay(d){
   const a2=box?.querySelector(`[data-k="RZende${2*d-1}"]`);
   const b1=box?.querySelector(`[data-k="RZstart${2*d}"]`);
   const b2=box?.querySelector(`[data-k="RZende${2*d}"]`);
+  const pauseOut=box?.querySelector(`[data-k="PauseRZ${2*d-1}"]`);
   const pauseR=box?.querySelector(`[data-k="PauseRZ${2*d}"]`);
 
   if(r.minutes){
@@ -755,14 +805,15 @@ function applyCustomerRouteDay(d){
     const outTime=outOverride && outOverride.value!=="" ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
     const backTime=backOverride && backOverride.value!=="" ? Math.max(0,parseInt(backOverride.value,10)||0) : r.minutes;
 
-    // Anfahrt: Listenzeit oder manuell geänderte Zeit.
+    // Anfahrt: Listenzeit/manuelle Zeit + Pause während Fahrt.
+    const pauseOutMin=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
+    const anfahrtGesamt=outTime+pauseOutMin;
     if(a1 && a2){
-      if(a2.value) a1.value=addMinutesToTime(a2.value,-outTime);
-      else if(a1.value) a2.value=addMinutesToTime(a1.value,outTime);
+      if(a2.value) a1.value=addMinutesToTime(a2.value,-anfahrtGesamt);
+      else if(a1.value) a2.value=addMinutesToTime(a1.value,anfahrtGesamt);
     }
 
-    // Rückfahrt: Listenzeit/manuelle Zeit + die im Feld Pause Reisezeit
-    // eingetragene Pause.
+    // Rückfahrt: Listenzeit/manuelle Zeit + Pause während Rückfahrt.
     const pauseMin=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
     const rueckfahrtGesamt=backTime+pauseMin;
     if(b1 && b2){
@@ -773,8 +824,9 @@ function applyCustomerRouteDay(d){
 
   const info=box?.querySelector(`#routeInfo${d}`);
   if(info){
+    const pauseOutShown=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
     const pauseShown=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
-    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Rückfahrt: ${fmtMin(r.minutes)} + ${pauseShown} Min Pause.`;
+    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Anfahrt: ${fmtMin(r.minutes)} + ${pauseOutShown} Min Pause. Rückfahrt: ${fmtMin(r.minutes)} + ${pauseShown} Min Pause.`;
   }
   recalcTimes();
 }
@@ -789,6 +841,7 @@ fetch("companies.json").then(r=>{
     // V27.6.51 FIX: after returning from a PDF, the previous report is kept
     // in sessionStorage for Safari. Choosing another company must invalidate
     // that old snapshot, otherwise pageshow can restore the previous company.
+    clearPdfReturnState();
 
     const c=selectedCompany();
     if(!c)return;
@@ -802,10 +855,12 @@ fetch("companies.json").then(r=>{
   };
   // If Safari recreated the document and the form is genuinely empty,
   // restore the report captured immediately before PDF generation.
+  restorePdfReturnStateIfNeeded();
 
 }).catch(err=>{
   console.error("companies.json:",err);
   $("company").innerHTML='<option value="">Fehler beim Laden der Firmen</option>';
+  restorePdfReturnStateIfNeeded();
 });
 
 function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
@@ -978,9 +1033,12 @@ function bindTimeInputs(){
 
         if(el.dataset.routeOverride==="out"){
           const a1=field("RZstart",outRow), a2=field("RZende",outRow);
+          const pause=field("PauseRZ",outRow);
+          const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
+          const elapsed=val+pauseMin;
           if(a1&&a2&&val>0){
-            if(a2.value) a1.value=addMinutesToTime(a2.value,-val);
-            else if(a1.value) a2.value=addMinutesToTime(a1.value,val);
+            if(a2.value) a1.value=addMinutesToTime(a2.value,-elapsed);
+            else if(a1.value) a2.value=addMinutesToTime(a1.value,elapsed);
           }
           if(isEmpty){
             el.dataset.manual="0";
@@ -1016,8 +1074,11 @@ function bindTimeInputs(){
         const a1=field("RZstart",outRow),a2=field("RZende",outRow);
         const b1=field("RZstart",backRow),b2=field("RZende",backRow);
         if(row===outRow && a1&&a2&&el.value){
-          if(el===a1)a2.value=addMinutesToTime(el.value,outMin);
-          else a1.value=addMinutesToTime(el.value,-outMin);
+          const pause=field("PauseRZ",outRow);
+          const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
+          const duration=outMin+pauseMin;
+          if(el===a1)a2.value=addMinutesToTime(el.value,duration);
+          else a1.value=addMinutesToTime(el.value,-duration);
           const az=field("AZstart",outRow);
           if(az&&a2.value&&az.dataset.manual!=="1")az.value=a2.value;
         }
@@ -1030,6 +1091,12 @@ function bindTimeInputs(){
         }
       }
 
+      if(key===`PauseRZ${outRow}` && outMin){
+        const a1=field("RZstart",outRow), a2=field("RZende",outRow);
+        if(a1 && a2 && a1.value) a2.value=addMinutesToTime(a1.value,outMin+pauseMinutes(el.value||"0"));
+        const az=field("AZstart",outRow);
+        if(az && a2?.value && az.dataset.manual!=="1") az.value=a2.value;
+      }
       if(key===`PauseRZ${backRow}` && backMin){
         const b1=field("RZstart",backRow), b2=field("RZende",backRow);
         if(b1 && b2 && b1.value) b2.value=addMinutesToTime(b1.value,backMin+pauseMinutes(el.value||"0"));
@@ -1061,6 +1128,7 @@ bindTimeInputs();
 recalcTimes();
 
   $("generate").onclick=async()=>{
+savePdfReturnState();
 $("status").textContent="PDF wird erstellt…";
 try{
 let bytes=await fetch("Leer.pdf").then(r=>r.arrayBuffer()),pdf=await PDFLib.PDFDocument.load(bytes),form=pdf.getForm();
@@ -1297,6 +1365,8 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
       if(label) label.classList.toggle("is-on", !!el.checked);
     });
   }
+  window.__sbCollectForm=collectForm;
+  window.__sbApplyForm=applyForm;
   function historyItemData(item){
     if(!item || typeof item!=="object") return null;
     if(item.data && typeof item.data==="object") return item.data;
