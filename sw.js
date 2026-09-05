@@ -1,8 +1,20 @@
-const CACHE_NAME = "servicebericht-v27-6-64";
-const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest", "./companies.json", "./Leer.pdf"];
+const CACHE_NAME = "servicebericht-v27-6-70";
+const APP_SHELL = [
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./companies.json",
+  "./Leer.pdf",
+  "./vendor/pdf-lib.min.js",
+  "./sw.js"
+];
 
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(APP_SHELL))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", event => {
@@ -17,8 +29,9 @@ self.addEventListener("fetch", event => {
   const req = event.request;
   if (req.method !== "GET") return;
 
-  // Always ask the network for the HTML so a new deployment is immediately used.
-  if (new URL(req.url).pathname.endsWith("/index.html") || req.mode === "navigate") {
+  const url = new URL(req.url);
+  // Always network-first for HTML so updates apply quickly.
+  if (url.pathname.endsWith("/index.html") || req.mode === "navigate") {
     event.respondWith(
       fetch(req, {cache:"no-store"})
         .then(res => {
@@ -31,11 +44,16 @@ self.addEventListener("fetch", event => {
     return;
   }
 
+  // Cache-first for local assets (pdf-lib, template PDF, companies).
   event.respondWith(
-    caches.match(req).then(cached => cached || fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE_NAME).then(c => c.put(req, copy));
-      return res;
-    }))
+    caches.match(req).then(cached => {
+      if (cached) return cached;
+      return fetch(req).then(res => {
+        if (!res || !res.ok) return res;
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(req, copy));
+        return res;
+      });
+    })
   );
 });
