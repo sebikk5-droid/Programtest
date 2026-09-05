@@ -1,0 +1,8 @@
+Servicebericht – V2.0 (osobna wersja)
+Created by S. Pawlina
+
+To jest osobna kopia aplikacji.
+- v1: pliki w głównym folderze (index.html) — bez zmian
+- v2: ten folder (v2/) — tu robimy nowe zmiany
+
+Otwieranie: .../v2/index.html

@@ -1,0 +1,10 @@
+Servicebericht – adresy HTML
+
+v1.0 (bez zmian):
+  index.html
+
+v2.0 (nowa wersja):
+  servicebericht-v2.html
+  albo bezpośrednio: v2/index.html
+
+Created by S. Pawlina
