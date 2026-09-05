@@ -812,10 +812,28 @@ function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
 function setSize(form,n,size){
   try{ form.getTextField(n).setFontSize(size); }catch(e){}
 }
+function fitSizeForField(n){
+  const name=String(n||"");
+  if(/^Datum\d+$/.test(name)) return 5.5;
+  if(/^Datum\b/.test(name)) return 6.5;
+  if(/^(RZstart|RZende|AZstart|AZende)\d+$/.test(name)) return 7;
+  if(/^(PauseRZ|PauseAZ)\d+$/.test(name)) return 6;
+  if(/^Kilometer\d+$/.test(name)) return 6.5;
+  if(/^(RZ|AZ)\d+$/.test(name)) return 7;
+  if(/gesamt|Gesamtzeit/i.test(name)) return 8;
+  if(/^Bemerkung\d+$/.test(name) || /^Ersatzteile/.test(name)) return 8;
+  return 9;
+}
+function setFit(form,n,v,size){
+  const s=v==null?"":String(v);
+  if(!s) return;
+  setSize(form,n, size!=null ? size : fitSizeForField(n));
+  set(form,n,s);
+}
 function setIf(form,n,v){
   const s=v==null?"":String(v).trim();
   if(!s || s==="--:--") return;
-  set(form,n,s);
+  setFit(form,n,s);
 }
 function filledTime(v){
   const s=v==null?"":String(v).trim();
@@ -1089,20 +1107,20 @@ for(let d=1;d<=dayBoxes.length;d++){
   const dateIso=dateEl?.value || (hasTimes ? isoAddDays($("date")?.value||"",d-1) : "");
   const date=pdfDate(dateIso);
   if(date){
-    setSize(form,`Datum${a}`,6); set(form,`Datum${a}`,date);
-    setSize(form,`Datum${b}`,6); set(form,`Datum${b}`,date);
+    setFit(form,`Datum${a}`,date,5.5);
+    setFit(form,`Datum${b}`,date,5.5);
   }
-  ["RZstart","RZende","AZstart","AZende"].forEach(k=>{ if(filledTime(q(`${k}${a}`).value)) set(form,`${k}${a}`,q(`${k}${a}`).value); });
-  ["RZstart","RZende"].forEach(k=>{ if(filledTime(q(`${k}${b}`).value)) set(form,`${k}${b}`,q(`${k}${b}`).value); });
+  ["RZstart","RZende","AZstart","AZende"].forEach(k=>{ if(filledTime(q(`${k}${a}`).value)) setFit(form,`${k}${a}`,q(`${k}${a}`).value,7); });
+  ["RZstart","RZende"].forEach(k=>{ if(filledTime(q(`${k}${b}`).value)) setFit(form,`${k}${b}`,q(`${k}${b}`).value,7); });
   const pauseOut=pauseMinutes(q(`PauseRZ${a}`).value||"");
   const pauseWork=pauseMinutes(q(`PauseAZ${a}`).value||"");
   const pauseBack=pauseMinutes(q(`PauseRZ${b}`).value||"");
-  if(pauseOut) set(form,`PauseRZ${a}`,fmtMinPdf(pauseOut));
-  if(pauseWork) set(form,`PauseAZ${a}`,fmtMinPdf(pauseWork));
-  if(pauseBack) set(form,`PauseRZ${b}`,fmtMinPdf(pauseBack));
+  if(pauseOut) setFit(form,`PauseRZ${a}`,fmtMinPdf(pauseOut),6);
+  if(pauseWork) setFit(form,`PauseAZ${a}`,fmtMinPdf(pauseWork),6);
+  if(pauseBack) setFit(form,`PauseRZ${b}`,fmtMinPdf(pauseBack),6);
   const kmA=q(`Kilometer${a}`).value, kmB=q(`Kilometer${b}`).value;
-  if(String(kmA).trim()!=="") set(form,`Kilometer${a}`,kmA);
-  if(String(kmB).trim()!=="") set(form,`Kilometer${b}`,kmB);
+  if(String(kmA).trim()!=="") setFit(form,`Kilometer${a}`,kmA,6.5);
+  if(String(kmB).trim()!=="") setFit(form,`Kilometer${b}`,kmB,6.5);
   const outOv=box.querySelector('[data-route-override="out"]');
   const backOv=box.querySelector('[data-route-override="back"]');
   const rt=outOv && String(outOv.value).trim()!==""
@@ -1112,17 +1130,17 @@ for(let d=1;d<=dayBoxes.length;d++){
   const rr=backOv && String(backOv.value).trim()!==""
     ? Math.max(0,parseInt(backOv.value,10)||0)
     : Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack);
-  if(rt) set(form,`RZ${a}`,fmtMinPdf(rt));
-  if(wt) set(form,`AZ${a}`,fmtMinPdf(wt));
-  if(rr) set(form,`RZ${b}`,fmtMinPdf(rr));
+  if(rt) setFit(form,`RZ${a}`,fmtMinPdf(rt),7);
+  if(wt) setFit(form,`AZ${a}`,fmtMinPdf(wt),7);
+  if(rr) setFit(form,`RZ${b}`,fmtMinPdf(rr),7);
   km+=(parseFloat((kmA||"").replace(",","."))||0);
   km+=(parseFloat((kmB||"").replace(",","."))||0);
   travel+=rt+rr;work+=wt;
 }
-if(km) set(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","));
-if(travel) set(form,"Reisezeit gesamt",fmtMinPdf(travel));
-if(work) set(form,"Arbeitszeit gesamt",fmtMinPdf(work));
-if(travel||work) set(form,"Gesamtzeit",fmtMinPdf(travel+work));
+if(km) setFit(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","),8);
+if(travel) setFit(form,"Reisezeit gesamt",fmtMinPdf(travel),8);
+if(work) setFit(form,"Arbeitszeit gesamt",fmtMinPdf(work),8);
+if(travel||work) setFit(form,"Gesamtzeit",fmtMinPdf(travel+work),8);
 
 const pdfHasContent=!!(
   c || firmaName() || r.length || p.length || km || travel || work || bet || ein || art ||
@@ -1132,12 +1150,10 @@ const pdfHasContent=!!(
 );
 if(pdfHasContent){
   if($("date").value){
-    setSize(form,"Datum Einsatzbeginn",7);
-    set(form,"Datum Einsatzbeginn",pdfDate($("date").value));
+    setFit(form,"Datum Einsatzbeginn",pdfDate($("date").value),6.5);
   }
   if($("signdate").value){
-    setSize(form,"Datum Unterschrift",7);
-    set(form,"Datum Unterschrift",pdfDate($("signdate").value));
+    setFit(form,"Datum Unterschrift",pdfDate($("signdate").value),6.5);
   }
 }
 
