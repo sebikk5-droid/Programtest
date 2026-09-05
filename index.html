@@ -293,7 +293,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 <div id="status"></div>
 </main>
-<div class="bottom"><button class="clear" onclick="try{sessionStorage.removeItem('servicebericht_pdf_return_v1')}catch(e){};location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button></div>
+<div class="bottom"><button class="clear" onclick="try{sessionStorage.removeItem('servicebericht_pdf_return_v1');localStorage.removeItem('pdf_remarks');Object.keys(localStorage).filter(k=>k.startsWith('choice_')||k.startsWith('pdf_')).forEach(k=>localStorage.removeItem(k));}catch(e){};location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
@@ -411,10 +411,11 @@ function clearPdfReturnState(){
   try{ sessionStorage.removeItem(PDF_RETURN_KEY); }catch(e){}
 }
 function formLooksEmptyForRestore(){
-  const ids=["customerSearch","street","city","contact","manufacturer","type","machineNo","tech","fault","hours"];
+  // Do not treat persisted Auswahl checkboxes as "form filled" — they live in
+  // localStorage and would otherwise block PDF-return restore after Safari reload.
+  const ids=["customerSearch","street","city","contact","manufacturer","type","machineNo","tech","fault","hours","remarks","parts"];
   if(ids.some(id=>String($(id)?.value||"").trim())) return false;
   if($("company")?.value) return false;
-  if(document.querySelector("#choices input:checked")) return false;
   if(document.querySelector('[data-k^="RZstart"]')?.value) return false;
   if(document.querySelector('[data-k^="AZstart"]')?.value) return false;
   if(document.querySelector('[data-k^="PauseRZ"]')?.value) return false;
@@ -457,17 +458,22 @@ window.addEventListener("pagehide",()=>{
   if(lastPdfBlob) savePdfReturnState();
 });
 
-const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signdate").value=today;
-
+function localIsoDate(d=new Date()){
+  const x=d instanceof Date ? d : new Date();
+  if(Number.isNaN(x.getTime())) return "";
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
+}
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
 let visibleDays=1;
 function isoAddDays(iso,n){
   if(!iso) return "";
-  const d=new Date(iso+"T00:00:00");
+  // Noon avoids DST/UTC day-shift (toISOString would move the date in DE).
+  const d=new Date(iso+"T12:00:00");
   if(Number.isNaN(d.getTime())) return "";
   d.setDate(d.getDate()+Number(n||0));
-  return d.toISOString().slice(0,10);
+  return localIsoDate(d);
 }
+const today=localIsoDate(); $("date").value=today;$("signdate").value=today;
 function dayBoxEl(d){return document.querySelector(`[data-daybox="${d}"]`);}
 function travelMinutesForDay(d,dir){
   const box=dayBoxEl(d);
@@ -741,6 +747,13 @@ document.addEventListener("click",function(e){
     const boxes=[...document.querySelectorAll("[data-daybox]")];
     boxes.forEach((b,i)=>{
       const n=i+1;
+      // Read current indexes from fields BEFORE renumbering (middle-day delete
+      // leaves Tag 3 with keys 5/6 — must not remap as if they were 3/4).
+      const sample=b.querySelector("[data-k^='RZstart']");
+      const curOut=sample ? parseInt(String(sample.getAttribute("data-k")).replace(/\D/g,""),10) : (2*n-1);
+      const curBack=Number.isFinite(curOut) ? curOut+1 : (2*n);
+      const newOut=2*n-1, newBack=2*n;
+
       b.setAttribute("data-daybox",String(n));
       const h=b.querySelector(".day-header h3");
       if(h)h.textContent=`Tag ${n}`;
@@ -748,21 +761,26 @@ document.addEventListener("click",function(e){
       b.querySelectorAll("[data-day-content]").forEach(x=>x.setAttribute("data-day-content",String(n)));
       const info=b.querySelector('[id^="routeInfo"]');
       if(info)info.id=`routeInfo${n}`;
+      const dayDate=b.querySelector(".daydate");
+      if(dayDate) dayDate.setAttribute("data-day",String(n));
+      const overnight=b.querySelector("[data-overnight-day]");
+      if(overnight) overnight.setAttribute("data-overnight-day",String(n));
 
-      // Keep existing field/calc indexes consistent with the day position.
-      const oldDay=String(i+1);
-      const oldOut=2*(i+1)-1, oldBack=2*(i+1);
-      const newOut=2*n-1, newBack=2*n;
+      const remap=val=>{
+        const s=String(val||"");
+        const mm=s.match(/^(.*?)(\d+)$/);
+        if(!mm) return s;
+        const v=parseInt(mm[2],10);
+        if(v===curOut) return mm[1]+String(newOut);
+        if(v===curBack) return mm[1]+String(newBack);
+        return s;
+      };
       b.querySelectorAll("[data-k]").forEach(x=>{
-        x.dataset.k=x.dataset.k.replace(/(\d+)$/,(_,num)=>{
-          const v=parseInt(num,10);
-          if(v===oldOut)return String(newOut);
-          if(v===oldBack)return String(newBack);
-          return num;
-        });
+        x.setAttribute("data-k", remap(x.getAttribute("data-k")));
       });
       b.querySelectorAll("[data-calc]").forEach(x=>{
-        x.dataset.calc=x.dataset.calc.replace(/\d+$/,String(n));
+        const c=String(x.getAttribute("data-calc")||"");
+        x.setAttribute("data-calc", c.replace(/\d+$/,String(n)));
       });
       b.querySelectorAll("[data-route-override]").forEach(x=>{
         x.dataset.overrideEvents="0";
@@ -1017,7 +1035,7 @@ function clearPdfForm(form){
     try{ form.updateFieldAppearances(); }catch(e){}
   }catch(e){}
 }
-function ls(t){return t.split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean)}
+function ls(t){return String(t||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean)}
 
 function minutesBetween(a,b){
   if(!a||!b)return 0;
@@ -1333,7 +1351,7 @@ if(work) setFit(form,"Arbeitszeit gesamt",fmtMinPdf(work),8);
 if(travel||work) setFit(form,"Gesamtzeit",fmtMinPdf(travel+work),8);
 
 const pdfHasContent=!!(
-  c || firmaName() || r.length || p.length || km || travel || work || bet || ein || art ||
+  c || firmaName() || remarkLines.length || p.length || km || travel || work || bet || ein || art ||
   document.getElementById("maschine_ok")?.checked ||
   ["street","city","contact","manufacturer","type","machineNo","control","nc","plc","fault","hours","tech","customersign"]
     .some(id=>String($(id)?.value||"").trim())
@@ -1925,6 +1943,11 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
       const previousBlob=lastPdfBlob;
     const finish=async()=>{
       if(lastPdfBlob===previousBlob){
+        if(++tries>=150){
+          const s=document.getElementById("status");
+          if(s) s.textContent="PDF konnte nicht erstellt werden.";
+          return;
+        }
         setTimeout(finish,100);
         return;
       }
