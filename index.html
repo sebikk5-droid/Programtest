@@ -638,76 +638,6 @@ function updateDayRouteNetto(d){
   }
 }
 
-document.getElementById("times").addEventListener("change",function(e){
-  const el=e.target;
-  if(!el.matches("select.quarter-time")) return;
-
-  const key=el.dataset.k||"";
-  const m=key.match(/^(RZstart|RZende|AZstart|AZende)(\d+)$/);
-  if(!m) return;
-
-  const row=parseInt(m[2],10);
-  const d=Math.ceil(row/2);
-  const box=dayBoxEl(d);
-  const outRow=d*2-1, backRow=d*2;
-  const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
-  const outMin=travelMinutesForDay(d,"out");
-  const backMin=travelMinutesForDay(d,"back");
-  if(!outMin && !backMin) return;
-
-  const a1=field("RZstart",outRow), a2=field("RZende",outRow);
-  const b1=field("RZstart",backRow), b2=field("RZende",backRow);
-  const pauseOut=field("PauseRZ",outRow);
-  const pauseOutMin=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
-  const pause=field("PauseRZ",backRow);
-  const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
-
-  if(el.value===""){
-    el.dataset.manual="0";
-    el.removeAttribute("data-manual");
-
-    if(row===outRow && a1 && a2 && outMin){
-      const duration=outMin+pauseOutMin;
-      if(el===a2 && a1.value) setQuarterTime(a2, addMinutesToTime(a1.value,duration));
-      else if(el===a1 && a2.value) setQuarterTime(a1, addMinutesToTime(a2.value,-duration));
-    }
-
-    if(row===backRow && b1 && b2 && backMin){
-      const duration=backMin+pauseMin;
-      if(el===b2 && b1.value) setQuarterTime(b2, addMinutesToTime(b1.value,duration));
-      else if(el===b1 && b2.value) setQuarterTime(b1, addMinutesToTime(b2.value,-duration));
-    }
-
-    recalcTimes(); updateDayRouteNetto(d);
-    return;
-  }
-
-  if(row===outRow && outMin){
-    const duration=outMin+pauseOutMin;
-    // Bei Ankunft-Änderung: Abfahrt inkl. Pause nach vorne. Bei Abfahrt-Änderung: Ankunft entsprechend.
-    if(el===a1 && a1.value) setQuarterTime(a2, addMinutesToTime(a1.value,duration));
-    else if(el===a2 && a2.value) setQuarterTime(a1, addMinutesToTime(a2.value,-duration));
-
-    const az=field("AZstart",outRow);
-    if(az && a2.value && az.dataset.manual!=="1") setQuarterTime(az, a2.value);
-  }
-
-  if(m[1]==="AZende"){
-    syncWorkEndToReturnStart(d);
-  }
-
-  if(row===backRow && backMin){
-    const duration=backMin+pauseMin;
-    if(el===b1 && b1.value) setQuarterTime(b2, addMinutesToTime(b1.value,duration));
-    else if(el===b2 && b2.value) setQuarterTime(b1, addMinutesToTime(b2.value,-duration));
-
-    const azEnd=field("AZende",outRow);
-    if(azEnd && b1.value && azEnd.dataset.manual!=="1") setQuarterTime(azEnd, b1.value);
-  }
-
-  recalcTimes(); updateDayRouteNetto(d);
-});
-
 document.getElementById("times").addEventListener("click",function(e){
   const btn=e.target.closest(".btn-day-collapse");
   if(!btn) return;
@@ -1170,11 +1100,12 @@ function pdfCheck(form,name,on){
   }catch(e){}
 }
 function bindTimeInputs(){
+  // Single source of truth for clock/pause/override sync (no second #times change listener).
   document.querySelectorAll("#times input, #times select").forEach(el=>{
     if(el.dataset.bound==="1") return;
     el.dataset.bound="1";
 
-    const handleTimeChange=()=>{
+    const handleTimeChange=(ev)=>{
       const key=el.dataset.k||"";
       const box=el.closest("[data-daybox]");
       const boxDay=box ? parseInt(box.getAttribute("data-daybox"),10) : 1;
@@ -1185,6 +1116,13 @@ function bindTimeInputs(){
       const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
       const outMin=travelMinutesForDay(d,"out");
       const backMin=travelMinutesForDay(d,"back");
+      const isPauseKey=key===`PauseRZ${outRow}` || key===`PauseRZ${backRow}` || key===`PauseAZ${outRow}`;
+      // While typing pause minutes, only refresh totals — shift clocks on change.
+      if(ev && ev.type==="input" && isPauseKey){
+        recalcTimes();
+        if(typeof updateDayRouteNetto==="function") updateDayRouteNetto(d);
+        return;
+      }
 
       if(el.dataset.routeOverride==="out" || el.dataset.routeOverride==="back"){
         const isEmpty=String(el.value??"").trim()==="";
@@ -1223,6 +1161,31 @@ function bindTimeInputs(){
         return;
       }
 
+      // Cleared quarter select → rebuild from the other clock + Fahrzeit/Pause.
+      if(m && (m[1]==="RZstart" || m[1]==="RZende") && el.value===""){
+        el.dataset.manual="0";
+        el.removeAttribute("data-manual");
+        const a1=field("RZstart",outRow),a2=field("RZende",outRow);
+        const b1=field("RZstart",backRow),b2=field("RZende",backRow);
+        const pauseOut=field("PauseRZ",outRow);
+        const pauseOutMin=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
+        const pauseBack=field("PauseRZ",backRow);
+        const pauseBackMin=pauseBack ? pauseMinutes(pauseBack.value||"0") : 0;
+        if(row===outRow && a1 && a2 && outMin){
+          const duration=outMin+pauseOutMin;
+          if(el===a2 && a1.value) setQuarterTime(a2, addMinutesToTime(a1.value,duration));
+          else if(el===a1 && a2.value) setQuarterTime(a1, addMinutesToTime(a2.value,-duration));
+        }
+        if(row===backRow && b1 && b2 && backMin){
+          const duration=backMin+pauseBackMin;
+          if(el===b2 && b1.value) setQuarterTime(b2, addMinutesToTime(b1.value,duration));
+          else if(el===b1 && b2.value) setQuarterTime(b1, addMinutesToTime(b2.value,-duration));
+        }
+        recalcTimes();
+        if(typeof updateDayRouteNetto==="function") updateDayRouteNetto(d);
+        return;
+      }
+
       if(m && (m[1]==="RZstart" || m[1]==="RZende") && outMin){
         const a1=field("RZstart",outRow),a2=field("RZende",outRow);
         const b1=field("RZstart",backRow),b2=field("RZende",backRow);
@@ -1242,6 +1205,8 @@ function bindTimeInputs(){
           const duration=backMin+pauseMin;
           if(el===b1) setQuarterTime(b2, addMinutesToTime(el.value,duration));
           else setQuarterTime(b1, addMinutesToTime(el.value,-duration));
+          const azEnd=field("AZende",outRow);
+          if(azEnd && b1.value && azEnd.dataset.manual!=="1") setQuarterTime(azEnd, b1.value);
         }
       }
 
@@ -1265,14 +1230,23 @@ function bindTimeInputs(){
         const pause=field("PauseRZ",backRow);
         const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
         if(ankunft) setQuarterTime(ankunft, addMinutesToTime(el.value,backMin+pauseMin));
+        const azEnd=field("AZende",outRow);
+        if(azEnd && el.value && azEnd.dataset.manual!=="1") setQuarterTime(azEnd, el.value);
       }
 
       if(key===`AZstart${outRow}`||key===`AZende${outRow}`)el.dataset.manual="1";
       recalcTimes();
       if(typeof updateDayRouteNetto==="function") updateDayRouteNetto(d);
     };
-    el.addEventListener("input",handleTimeChange);
-    el.addEventListener("change",handleTimeChange);
+
+    // Selects: only change (avoids double-fire with input+change).
+    // Number fields: input for live totals, change for clock shifts (pause).
+    if(el.matches("select.quarter-time")){
+      el.addEventListener("change",handleTimeChange);
+    }else{
+      el.addEventListener("input",handleTimeChange);
+      el.addEventListener("change",handleTimeChange);
+    }
   });
 }
 bindTimeInputs();
