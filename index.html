@@ -215,7 +215,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 
 <section class="card"><h2>Bemerkungen</h2>
 <textarea id="remarks" placeholder="- Software-Update durchgeführt.&#10;- ..." rows="7"></textarea>
-<div class="muted" id="remarksHint" style="margin-top:6px">Lange Zeilen werden automatisch umgebrochen (max. 7 Zeilen · Zeile 1: 90 Zeichen, danach 100), passend zum PDF.</div>
+<div class="muted" id="remarksHint" style="margin-top:6px">Lange Zeilen werden automatisch an die PDF-Zeilenbreite umgebrochen (max. 7 Zeilen).</div>
 </section>
 <section class="card"><h2>Ersatzteile</h2><textarea id="parts" placeholder="- ..."></textarea></section>
 
@@ -302,10 +302,29 @@ document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
   el.addEventListener("input",()=>{try{localStorage.setItem(k,el.value);}catch(e){}});
 });
 
-// Bemerkungen: same line limits as the PDF line boxes (Helvetica ~9pt).
-// Line 1 is shorter because the label sits on the left of that row.
-const REMARK_LINE_LIMITS=[90,100,100,100,100,100,100];
-const REMARK_MAX_LINES=REMARK_LINE_LIMITS.length;
+// Bemerkungen: wrap by real Helvetica width so lines match the PDF boxes.
+// Line 1 is narrower because the label sits on the left of that row.
+const REMARK_FONT_SIZE=9;
+const REMARK_MAX_WIDTHS=[428.6,480.4,480.4,480.1,479.9,479.8,479.7];
+const REMARK_MAX_LINES=REMARK_MAX_WIDTHS.length;
+// Standard Helvetica glyph widths (units/1000 em), matching pdf-lib.
+const HELVETICA_WIDTHS={"0":556,"1":556,"2":556,"3":556,"4":556,"5":556,"6":556,"7":556,"8":556,"9":556," ":278,"!":278,"\"":355,"#":556,"$":556,"%":889,"&":667,"'":191,"(":333,")":333,"*":389,"+":584,",":278,"-":333,".":278,"/":278,":":278,";":278,"<":584,"=":584,">":584,"?":556,"@":1015,"A":667,"B":667,"C":722,"D":722,"E":667,"F":611,"G":778,"H":722,"I":278,"J":500,"K":667,"L":556,"M":833,"N":722,"O":778,"P":667,"Q":778,"R":722,"S":667,"T":611,"U":722,"V":667,"W":944,"X":667,"Y":667,"Z":611,"[":278,"\\":278,"]":278,"^":469,"_":556,"`":333,"a":556,"b":556,"c":500,"d":556,"e":556,"f":278,"g":556,"h":556,"i":222,"j":222,"k":500,"l":222,"m":833,"n":556,"o":556,"p":556,"q":556,"r":333,"s":500,"t":278,"u":556,"v":500,"w":722,"x":500,"y":500,"z":500,"{":334,"|":260,"}":334,"~":584,"Ä":667,"Ö":778,"Ü":722,"ä":556,"ö":556,"ü":556,"ß":611,"€":556};
+function remarkTextWidth(text){
+  let w=0;
+  for(const ch of String(text||"")) w+=(HELVETICA_WIDTHS[ch]??556)*REMARK_FONT_SIZE/1000;
+  return w;
+}
+function fitRemarkChars(text,maxW){
+  const s=String(text||"");
+  if(!s || remarkTextWidth(s)<=maxW) return s.length;
+  let lo=1,hi=s.length;
+  while(lo<hi){
+    const mid=(lo+hi+1)>>1;
+    if(remarkTextWidth(s.slice(0,mid))<=maxW) lo=mid;
+    else hi=mid-1;
+  }
+  return Math.max(1,lo);
+}
 function wrapRemarkText(raw){
   const parts=String(raw||"").replace(/\r\n/g,"\n").split("\n");
   const out=[];
@@ -316,12 +335,12 @@ function wrapRemarkText(raw){
       continue;
     }
     while(out.length<REMARK_MAX_LINES){
-      const limit=REMARK_LINE_LIMITS[out.length];
-      if(rest.length<=limit){ out.push(rest); break; }
-      let cut=limit;
-      const slice=rest.slice(0,limit);
+      const maxW=REMARK_MAX_WIDTHS[out.length];
+      if(remarkTextWidth(rest)<=maxW){ out.push(rest); break; }
+      let cut=fitRemarkChars(rest,maxW);
+      const slice=rest.slice(0,cut);
       const sp=slice.lastIndexOf(" ");
-      if(sp>=Math.ceil(limit*0.4)) cut=sp;
+      if(sp>=Math.ceil(cut*0.4)) cut=sp;
       out.push(rest.slice(0,cut).replace(/\s+$/,""));
       rest=rest.slice(cut).replace(/^\s+/,"");
       if(!rest) break;
@@ -656,6 +675,7 @@ document.getElementById("times").addEventListener("change",function(e){
 
   if(row===outRow && outMin){
     const duration=outMin+pauseOutMin;
+    // Bei Ankunft-Änderung: Abfahrt inkl. Pause nach vorne. Bei Abfahrt-Änderung: Ankunft entsprechend.
     if(el===a1 && a1.value) a2.value=addMinutesToTime(a1.value,duration);
     else if(el===a2 && a2.value) a1.value=addMinutesToTime(a2.value,-duration);
 
@@ -837,6 +857,7 @@ function applyCustomerRouteDay1(){
     // Pause verlängert die Uhrzeiten, Reisezeit netto bleibt die reine Fahrzeit.
     const pauseOut=document.querySelector('[data-k="PauseRZ1"]');
     const pauseOutMin=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
+    // Pause während Anfahrt verschiebt die Abfahrt; Ankunft wird beibehalten wenn gesetzt.
     const anfahrtGesamt=outTime+pauseOutMin;
     if(a1 && a2){
       if(a2.value) a1.value=addMinutesToTime(a2.value,-anfahrtGesamt);
@@ -889,6 +910,7 @@ function applyCustomerRouteDay(d){
 
     // Anfahrt: Listenzeit/manuelle Zeit + Pause während Fahrt.
     const pauseOutMin=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
+    // Pause während Anfahrt verschiebt die Abfahrt; Ankunft wird beibehalten wenn gesetzt.
     const anfahrtGesamt=outTime+pauseOutMin;
     if(a1 && a2){
       if(a2.value) a1.value=addMinutesToTime(a2.value,-anfahrtGesamt);
@@ -1124,8 +1146,9 @@ function bindTimeInputs(){
           const a1=field("RZstart",outRow), a2=field("RZende",outRow);
           const pause=field("PauseRZ",outRow);
           const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
-          const elapsed=val+pauseMin;
           if(a1&&a2&&val>0){
+            const elapsed=val+pauseMin;
+            // Override Anfahrt: Ankunft beibehalten, Abfahrt inkl. Pause anpassen.
             if(a2.value) a1.value=addMinutesToTime(a2.value,-elapsed);
             else if(a1.value) a2.value=addMinutesToTime(a1.value,elapsed);
           }
@@ -1166,7 +1189,8 @@ function bindTimeInputs(){
           const pause=field("PauseRZ",outRow);
           const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
           const duration=outMin+pauseMin;
-          if(el===a1)a2.value=addMinutesToTime(el.value,duration);
+          // Ankunft ändern -> Abfahrt inkl. Pause. Abfahrt ändern -> Ankunft.
+          if(el===a1) a2.value=addMinutesToTime(el.value,duration);
           else a1.value=addMinutesToTime(el.value,-duration);
           const az=field("AZstart",outRow);
           if(az&&a2.value&&az.dataset.manual!=="1")az.value=a2.value;
@@ -1181,8 +1205,12 @@ function bindTimeInputs(){
       }
 
       if(key===`PauseRZ${outRow}` && outMin){
+        // Pause während Anfahrt: Abfahrt nach vorne verschieben, Ankunft beibehalten.
         const a1=field("RZstart",outRow), a2=field("RZende",outRow);
-        if(a1 && a2 && a1.value) a2.value=addMinutesToTime(a1.value,outMin+pauseMinutes(el.value||"0"));
+        const pauseMin=pauseMinutes(el.value||"0");
+        const duration=outMin+pauseMin;
+        if(a1 && a2 && a2.value) a1.value=addMinutesToTime(a2.value,-duration);
+        else if(a1 && a2 && a1.value) a2.value=addMinutesToTime(a1.value,duration);
         const az=field("AZstart",outRow);
         if(az && a2?.value && az.dataset.manual!=="1") az.value=a2.value;
       }
@@ -1337,7 +1365,7 @@ form.updateFieldAppearances();
 form.flatten();
 
 // Draw Bemerkungen after flatten, clipped to each line box.
-// setFit/fontSize 8 on these fields made long lines run out of the PDF frame.
+// Wrap again with the embedded Helvetica font so PDF width matches exactly.
 try{
   const page0=pdf.getPages()[0];
   const font=await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
@@ -1351,14 +1379,42 @@ try{
     [67.7008,478.642,555.403,496.122]
   ];
   const fontSize=9;
-  for(let i=0;i<Math.min(remarkLines.length,remarkRects.length);i++){
-    const [x0,y0,x1]=remarkRects[i];
-    const maxW=Math.max(10,(x1-x0)-6);
-    let txt=String(remarkLines[i]||"");
-    if(font.widthOfTextAtSize(txt,fontSize)>maxW){
-      while(txt.length>1 && font.widthOfTextAtSize(txt+"…",fontSize)>maxW) txt=txt.slice(0,-1);
-      txt=txt+"…";
+  const pad=8;
+  function fitPdfChars(text,maxW){
+    const s=String(text||"");
+    if(!s || font.widthOfTextAtSize(s,fontSize)<=maxW) return s.length;
+    let lo=1,hi=s.length;
+    while(lo<hi){
+      const mid=(lo+hi+1)>>1;
+      if(font.widthOfTextAtSize(s.slice(0,mid),fontSize)<=maxW) lo=mid;
+      else hi=mid-1;
     }
+    return Math.max(1,lo);
+  }
+  function wrapPdfRemarks(raw){
+    const parts=String(raw||"").replace(/\r\n/g,"\n").split("\n");
+    const out=[];
+    for(let pi=0;pi<parts.length && out.length<remarkRects.length;pi++){
+      let rest=parts[pi].trim();
+      if(!rest) continue;
+      while(rest && out.length<remarkRects.length){
+        const [x0,,x1]=remarkRects[out.length];
+        const maxW=Math.max(10,(x1-x0)-pad);
+        if(font.widthOfTextAtSize(rest,fontSize)<=maxW){ out.push(rest); break; }
+        let cut=fitPdfChars(rest,maxW);
+        const slice=rest.slice(0,cut);
+        const sp=slice.lastIndexOf(" ");
+        if(sp>=Math.ceil(cut*0.4)) cut=sp;
+        out.push(rest.slice(0,cut).replace(/\s+$/,""));
+        rest=rest.slice(cut).replace(/^\s+/,"");
+      }
+    }
+    return out;
+  }
+  const drawLines=wrapPdfRemarks($("remarks").value||"");
+  for(let i=0;i<drawLines.length;i++){
+    const [x0,y0]=remarkRects[i];
+    const txt=drawLines[i];
     if(txt) page0.drawText(txt,{x:x0+2,y:y0+2.5,size:fontSize,font});
   }
 }catch(e){ console.warn("Bemerkungen:",e); }
