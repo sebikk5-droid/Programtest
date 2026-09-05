@@ -822,13 +822,16 @@ function fitSizeForField(n){
   if(/^(RZ|AZ)\d+$/.test(name)) return 7;
   if(/gesamt|Gesamtzeit/i.test(name)) return 8;
   if(/^(Firma|Straße|PLZ|Ansprechpartner|Hersteller|Typ|Maschinennummer|Steuerung|NC Version|PLC Version|Störung|Betriebsstunden|Name Servicetechniker|Name Unterschrift Kunde)/.test(name)) return 8;
-  if(/^Bemerkung\d+$/.test(name) || /^Ersatzteile/.test(name)) return 8;
+  // Bemerkung / Ersatzteile keep the PDF template auto-size (/Helv 0 Tf).
+  // A fixed size (e.g. 8) makes long lines overflow the field frames again.
+  if(/^Bemerkung\d+$/.test(name) || /^Ersatzteile/.test(name)) return null;
   return 8;
 }
 function setFit(form,n,v,size){
   const s=v==null?"":String(v);
   if(!s) return;
-  setSize(form,n, size!=null ? size : fitSizeForField(n));
+  const sz = size!=null ? size : fitSizeForField(n);
+  if(sz!=null && sz>0) setSize(form,n,sz);
   set(form,n,s);
 }
 function setIf(form,n,v){
@@ -1094,8 +1097,10 @@ setIf(form,"Steuerung",$("control").value);setIf(form,"NC Version",$("nc").value
 setIf(form,"Störung",$("fault").value);setIf(form,"Betriebsstunden",$("hours").value);
 setIf(form,"Name Servicetechniker",$("tech").value);
 setIf(form,"Name Unterschrift Kunde",$("customersign").value);
-let r=String($("remarks").value||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-for(let i=1;i<=7;i++)setIf(form,"Bemerkung"+i,r[i-1]||"");
+// Bemerkungen are drawn after flatten (see below). Leave the AcroForm
+ // fields empty so a fixed appearance cannot overflow the line frames again.
+const remarkLines=String($("remarks").value||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,"");
 let p=ls($("parts").value);for(let i=1;i<=4;i++)setIf(form,"Ersatzteile "+i,p[i-1]||"");
 let km=0, travel=0, work=0;
 const dayBoxes=[...document.querySelectorAll("[data-daybox]")];
@@ -1172,7 +1177,37 @@ for(let d=1;d<=dayBoxes.length;d++){
     page.drawText("X",{x:overnightX,y:y-3,size:9});
   }
 }
-form.updateFieldAppearances();form.flatten();let out=await pdf.save();
+form.updateFieldAppearances();
+form.flatten();
+
+// Draw Bemerkungen after flatten, clipped to each line box.
+// setFit/fontSize 8 on these fields made long lines run out of the PDF frame.
+try{
+  const page0=pdf.getPages()[0];
+  const font=await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
+  const remarkRects=[
+    [118.826,582.546,555.468,597.636],
+    [67.701,563.990,556.100,581.470],
+    [67.701,546.664,556.055,564.100],
+    [67.7008,529.659,555.779,547.094],
+    [67.7008,512.653,555.591,530.044],
+    [67.7008,495.648,555.547,512.752],
+    [67.7008,478.642,555.403,496.122]
+  ];
+  const fontSize=9;
+  for(let i=0;i<Math.min(remarkLines.length,remarkRects.length);i++){
+    const [x0,y0,x1]=remarkRects[i];
+    const maxW=Math.max(10,(x1-x0)-6);
+    let txt=String(remarkLines[i]||"");
+    if(font.widthOfTextAtSize(txt,fontSize)>maxW){
+      while(txt.length>1 && font.widthOfTextAtSize(txt+"…",fontSize)>maxW) txt=txt.slice(0,-1);
+      txt=txt+"…";
+    }
+    if(txt) page0.drawText(txt,{x:x0+2,y:y0+2.5,size:fontSize,font});
+  }
+}catch(e){ console.warn("Bemerkungen:",e); }
+
+let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("status").textContent="Fertig – das PDF ist vorbereitet.";
 }catch(e){$("status").textContent="Fehler: "+e.message}
