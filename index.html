@@ -821,8 +821,9 @@ function fitSizeForField(n){
   if(/^Kilometer\d+$/.test(name)) return 6.5;
   if(/^(RZ|AZ)\d+$/.test(name)) return 7;
   if(/gesamt|Gesamtzeit/i.test(name)) return 8;
+  if(/^(Firma|Straße|PLZ|Ansprechpartner|Hersteller|Typ|Maschinennummer|Steuerung|NC Version|PLC Version|Störung|Betriebsstunden|Name Servicetechniker|Name Unterschrift Kunde)/.test(name)) return 8;
   if(/^Bemerkung\d+$/.test(name) || /^Ersatzteile/.test(name)) return 8;
-  return 9;
+  return 8;
 }
 function setFit(form,n,v,size){
   const s=v==null?"":String(v);
