@@ -293,7 +293,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 </section>
 <div id="status"></div>
 </main>
-<div class="bottom"><button class="clear" onclick="try{sessionStorage.removeItem('servicebericht_pdf_return_v1')}catch(e){};location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button></div>
+<div class="bottom"><button class="clear" onclick="try{sessionStorage.removeItem('servicebericht_pdf_return_v1');localStorage.removeItem('pdf_remarks');Object.keys(localStorage).filter(k=>k.startsWith('choice_')||k.startsWith('pdf_')).forEach(k=>localStorage.removeItem(k));}catch(e){};location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
 document.querySelectorAll("#pdfFields input,#pdfFields textarea").forEach(el=>{
@@ -411,10 +411,11 @@ function clearPdfReturnState(){
   try{ sessionStorage.removeItem(PDF_RETURN_KEY); }catch(e){}
 }
 function formLooksEmptyForRestore(){
-  const ids=["customerSearch","street","city","contact","manufacturer","type","machineNo","tech","fault","hours"];
+  // Do not treat persisted Auswahl checkboxes as "form filled" — they live in
+  // localStorage and would otherwise block PDF-return restore after Safari reload.
+  const ids=["customerSearch","street","city","contact","manufacturer","type","machineNo","tech","fault","hours","remarks","parts"];
   if(ids.some(id=>String($(id)?.value||"").trim())) return false;
   if($("company")?.value) return false;
-  if(document.querySelector("#choices input:checked")) return false;
   if(document.querySelector('[data-k^="RZstart"]')?.value) return false;
   if(document.querySelector('[data-k^="AZstart"]')?.value) return false;
   if(document.querySelector('[data-k^="PauseRZ"]')?.value) return false;
@@ -457,17 +458,22 @@ window.addEventListener("pagehide",()=>{
   if(lastPdfBlob) savePdfReturnState();
 });
 
-const today=new Date().toISOString().slice(0,10); $("date").value=today;$("signdate").value=today;
-
+function localIsoDate(d=new Date()){
+  const x=d instanceof Date ? d : new Date();
+  if(Number.isNaN(x.getTime())) return "";
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
+}
 function address(a){let p=(a||"").split(",").map(x=>x.trim()).filter(Boolean);if(p.length<2)return[a||"",""];let last=p.pop();return[p.join(", "),last]}
 let visibleDays=1;
 function isoAddDays(iso,n){
   if(!iso) return "";
-  const d=new Date(iso+"T00:00:00");
+  // Noon avoids DST/UTC day-shift (toISOString would move the date in DE).
+  const d=new Date(iso+"T12:00:00");
   if(Number.isNaN(d.getTime())) return "";
   d.setDate(d.getDate()+Number(n||0));
-  return d.toISOString().slice(0,10);
+  return localIsoDate(d);
 }
+const today=localIsoDate(); $("date").value=today;$("signdate").value=today;
 function dayBoxEl(d){return document.querySelector(`[data-daybox="${d}"]`);}
 function travelMinutesForDay(d,dir){
   const box=dayBoxEl(d);
@@ -487,12 +493,12 @@ function syncWorkEndToReturnStart(d){
   if(!azEnd||!abreise) return;
   const t=azEnd.value;
   if(!t) return;
-  abreise.value=t;
+  setQuarterTime(abreise, t);
   abreise.dataset.manual="0";
   abreise.removeAttribute("data-manual");
   const backMin=travelMinutesForDay(d,"back");
   const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
-  if(ankunft && backMin) ankunft.value=addMinutesToTime(t,backMin+pauseMin);
+  if(ankunft && backMin) setQuarterTime(ankunft, addMinutesToTime(t,backMin+pauseMin));
 }
 function quarterTimeOptions(){
   let o='<option value="">--:--</option>';
@@ -616,15 +622,18 @@ function updateDayRouteNetto(d){
   const outOverride=box.querySelector('[data-route-override="out"]');
   const backOverride=box.querySelector('[data-route-override="back"]');
   if(rt){
+    // Netto = Listen-/Override-Fahrzeit — Pause ändert die Uhr, nicht das Netto.
+    const routeMin=travelMinutesForDay(d,"out");
     const v=outOverride && outOverride.value!==""
       ? Math.max(0,parseInt(outOverride.value,10)||0)
-      : Math.max(0,minutesBetween(a1?.value||"",a2?.value||"")-pauseMinutes(pa?.value||"0"));
+      : (routeMin>0 ? routeMin : Math.max(0,minutesBetween(a1?.value||"",a2?.value||"")-pauseMinutes(pa?.value||"0")));
     rt.value=fmtMin(v);
   }
   if(rr){
+    const routeMin=travelMinutesForDay(d,"back");
     const v=backOverride && backOverride.value!==""
       ? Math.max(0,parseInt(backOverride.value,10)||0)
-      : Math.max(0,minutesBetween(b1?.value||"",b2?.value||"")-pauseMinutes(pb?.value||"0"));
+      : (routeMin>0 ? routeMin : Math.max(0,minutesBetween(b1?.value||"",b2?.value||"")-pauseMinutes(pb?.value||"0")));
     rr.value=fmtMin(v);
   }
 }
@@ -659,14 +668,14 @@ document.getElementById("times").addEventListener("change",function(e){
 
     if(row===outRow && a1 && a2 && outMin){
       const duration=outMin+pauseOutMin;
-      if(el===a2 && a1.value) a2.value=addMinutesToTime(a1.value,duration);
-      else if(el===a1 && a2.value) a1.value=addMinutesToTime(a2.value,-duration);
+      if(el===a2 && a1.value) setQuarterTime(a2, addMinutesToTime(a1.value,duration));
+      else if(el===a1 && a2.value) setQuarterTime(a1, addMinutesToTime(a2.value,-duration));
     }
 
     if(row===backRow && b1 && b2 && backMin){
       const duration=backMin+pauseMin;
-      if(el===b2 && b1.value) b2.value=addMinutesToTime(b1.value,duration);
-      else if(el===b1 && b2.value) b1.value=addMinutesToTime(b2.value,-duration);
+      if(el===b2 && b1.value) setQuarterTime(b2, addMinutesToTime(b1.value,duration));
+      else if(el===b1 && b2.value) setQuarterTime(b1, addMinutesToTime(b2.value,-duration));
     }
 
     recalcTimes(); updateDayRouteNetto(d);
@@ -676,11 +685,11 @@ document.getElementById("times").addEventListener("change",function(e){
   if(row===outRow && outMin){
     const duration=outMin+pauseOutMin;
     // Bei Ankunft-Änderung: Abfahrt inkl. Pause nach vorne. Bei Abfahrt-Änderung: Ankunft entsprechend.
-    if(el===a1 && a1.value) a2.value=addMinutesToTime(a1.value,duration);
-    else if(el===a2 && a2.value) a1.value=addMinutesToTime(a2.value,-duration);
+    if(el===a1 && a1.value) setQuarterTime(a2, addMinutesToTime(a1.value,duration));
+    else if(el===a2 && a2.value) setQuarterTime(a1, addMinutesToTime(a2.value,-duration));
 
     const az=field("AZstart",outRow);
-    if(az && a2.value && az.dataset.manual!=="1") az.value=a2.value;
+    if(az && a2.value && az.dataset.manual!=="1") setQuarterTime(az, a2.value);
   }
 
   if(m[1]==="AZende"){
@@ -689,11 +698,11 @@ document.getElementById("times").addEventListener("change",function(e){
 
   if(row===backRow && backMin){
     const duration=backMin+pauseMin;
-    if(el===b1 && b1.value) b2.value=addMinutesToTime(b1.value,duration);
-    else if(el===b2 && b2.value) b1.value=addMinutesToTime(b2.value,-duration);
+    if(el===b1 && b1.value) setQuarterTime(b2, addMinutesToTime(b1.value,duration));
+    else if(el===b2 && b2.value) setQuarterTime(b1, addMinutesToTime(b2.value,-duration));
 
     const azEnd=field("AZende",outRow);
-    if(azEnd && b1.value && azEnd.dataset.manual!=="1") azEnd.value=b1.value;
+    if(azEnd && b1.value && azEnd.dataset.manual!=="1") setQuarterTime(azEnd, b1.value);
   }
 
   recalcTimes(); updateDayRouteNetto(d);
@@ -741,6 +750,13 @@ document.addEventListener("click",function(e){
     const boxes=[...document.querySelectorAll("[data-daybox]")];
     boxes.forEach((b,i)=>{
       const n=i+1;
+      // Read current indexes from fields BEFORE renumbering (middle-day delete
+      // leaves Tag 3 with keys 5/6 — must not remap as if they were 3/4).
+      const sample=b.querySelector("[data-k^='RZstart']");
+      const curOut=sample ? parseInt(String(sample.getAttribute("data-k")).replace(/\D/g,""),10) : (2*n-1);
+      const curBack=Number.isFinite(curOut) ? curOut+1 : (2*n);
+      const newOut=2*n-1, newBack=2*n;
+
       b.setAttribute("data-daybox",String(n));
       const h=b.querySelector(".day-header h3");
       if(h)h.textContent=`Tag ${n}`;
@@ -748,21 +764,26 @@ document.addEventListener("click",function(e){
       b.querySelectorAll("[data-day-content]").forEach(x=>x.setAttribute("data-day-content",String(n)));
       const info=b.querySelector('[id^="routeInfo"]');
       if(info)info.id=`routeInfo${n}`;
+      const dayDate=b.querySelector(".daydate");
+      if(dayDate) dayDate.setAttribute("data-day",String(n));
+      const overnight=b.querySelector("[data-overnight-day]");
+      if(overnight) overnight.setAttribute("data-overnight-day",String(n));
 
-      // Keep existing field/calc indexes consistent with the day position.
-      const oldDay=String(i+1);
-      const oldOut=2*(i+1)-1, oldBack=2*(i+1);
-      const newOut=2*n-1, newBack=2*n;
+      const remap=val=>{
+        const s=String(val||"");
+        const mm=s.match(/^(.*?)(\d+)$/);
+        if(!mm) return s;
+        const v=parseInt(mm[2],10);
+        if(v===curOut) return mm[1]+String(newOut);
+        if(v===curBack) return mm[1]+String(newBack);
+        return s;
+      };
       b.querySelectorAll("[data-k]").forEach(x=>{
-        x.dataset.k=x.dataset.k.replace(/(\d+)$/,(_,num)=>{
-          const v=parseInt(num,10);
-          if(v===oldOut)return String(newOut);
-          if(v===oldBack)return String(newBack);
-          return num;
-        });
+        x.setAttribute("data-k", remap(x.getAttribute("data-k")));
       });
       b.querySelectorAll("[data-calc]").forEach(x=>{
-        x.dataset.calc=x.dataset.calc.replace(/\d+$/,String(n));
+        const c=String(x.getAttribute("data-calc")||"");
+        x.setAttribute("data-calc", c.replace(/\d+$/,String(n)));
       });
       b.querySelectorAll("[data-route-override]").forEach(x=>{
         x.dataset.overrideEvents="0";
@@ -811,6 +832,42 @@ function addMinutesToTime(t,mins){
   m=((m%1440)+1440)%1440;
   return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
 }
+function setQuarterTime(el,value){
+  if(!el || value==null || value===""){ if(el) el.value=""; return; }
+  const v=String(value);
+  if(el.tagName==="SELECT" && v && !Array.from(el.options).some(o=>o.value===v)){
+    const opt=document.createElement("option");
+    opt.value=v; opt.textContent=v;
+    el.appendChild(opt);
+  }
+  el.value=v;
+}
+function anfahrtDuration(d){
+  return Math.max(0,(travelMinutesForDay(d,"out")||0));
+}
+function applyAnfahrtPauseClock(d){
+  // Pause während Fahrt gehört in die Uhrspanne Abfahrt↔Ankunft,
+  // verschiebt Abfahrt nach vorne und lässt Reisezeit netto unverändert.
+  const box=dayBoxEl(d);
+  if(!box) return;
+  const outRow=d*2-1;
+  const a1=box.querySelector(`[data-k="RZstart${outRow}"]`);
+  const a2=box.querySelector(`[data-k="RZende${outRow}"]`);
+  const pauseEl=box.querySelector(`[data-k="PauseRZ${outRow}"]`);
+  const outMin=anfahrtDuration(d);
+  if(!a1 || !a2 || !outMin) return;
+  const pauseMin=pauseMinutes(pauseEl?.value||"0");
+  const duration=outMin+pauseMin;
+  if(a2.value){
+    setQuarterTime(a1, addMinutesToTime(a2.value,-duration));
+  }else if(a1.value){
+    const ankunft=addMinutesToTime(a1.value,outMin); // Ankunft = reine Fahrzeit
+    setQuarterTime(a2, ankunft);
+    setQuarterTime(a1, addMinutesToTime(ankunft,-duration));
+  }
+  const az=box.querySelector(`[data-k="AZstart${outRow}"]`);
+  if(az && a2.value && az.dataset.manual!=="1") setQuarterTime(az, a2.value);
+}
 function selectedCompany(){
   const v=$("company")?.value;
   if(v==="" || v==null) return null;
@@ -853,23 +910,15 @@ function applyCustomerRouteDay1(){
     const outTime=outOverride && outOverride.value!=="" ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
     const backTime=backOverride && backOverride.value!=="" ? Math.max(0,parseInt(backOverride.value,10)||0) : r.minutes;
 
-    // Anfahrt: Listenzeit/manuelle Zeit + Pause während Fahrt.
-    // Pause verlängert die Uhrzeiten, Reisezeit netto bleibt die reine Fahrzeit.
-    const pauseOut=document.querySelector('[data-k="PauseRZ1"]');
-    const pauseOutMin=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
-    // Pause während Anfahrt verschiebt die Abfahrt; Ankunft wird beibehalten wenn gesetzt.
-    const anfahrtGesamt=outTime+pauseOutMin;
-    if(a1 && a2){
-      if(a2.value) a1.value=addMinutesToTime(a2.value,-anfahrtGesamt);
-      else if(a1.value) a2.value=addMinutesToTime(a1.value,anfahrtGesamt);
-    }
+    // Anfahrt: Pause verschiebt Abfahrt, Ankunft bleibt; Netto = reine Fahrzeit.
+    applyAnfahrtPauseClock(1);
 
     // Rückfahrt: Listenzeit/manuelle Zeit + Pause während Rückfahrt.
     const pauseMin=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
     const rueckfahrtGesamt=backTime+pauseMin;
     if(b1 && b2){
-      if(b2.value) b1.value=addMinutesToTime(b2.value,-rueckfahrtGesamt);
-      else if(b1.value) b2.value=addMinutesToTime(b1.value,rueckfahrtGesamt);
+      if(b2.value) setQuarterTime(b1, addMinutesToTime(b2.value,-rueckfahrtGesamt));
+      else if(b1.value) setQuarterTime(b2, addMinutesToTime(b1.value,rueckfahrtGesamt));
     }
   }
 
@@ -908,21 +957,15 @@ function applyCustomerRouteDay(d){
     const outTime=outOverride && outOverride.value!=="" ? Math.max(0,parseInt(outOverride.value,10)||0) : r.minutes;
     const backTime=backOverride && backOverride.value!=="" ? Math.max(0,parseInt(backOverride.value,10)||0) : r.minutes;
 
-    // Anfahrt: Listenzeit/manuelle Zeit + Pause während Fahrt.
-    const pauseOutMin=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
-    // Pause während Anfahrt verschiebt die Abfahrt; Ankunft wird beibehalten wenn gesetzt.
-    const anfahrtGesamt=outTime+pauseOutMin;
-    if(a1 && a2){
-      if(a2.value) a1.value=addMinutesToTime(a2.value,-anfahrtGesamt);
-      else if(a1.value) a2.value=addMinutesToTime(a1.value,anfahrtGesamt);
-    }
+    // Anfahrt: Pause verschiebt Abfahrt, Ankunft bleibt; Netto = reine Fahrzeit.
+    applyAnfahrtPauseClock(d);
 
     // Rückfahrt: Listenzeit/manuelle Zeit + Pause während Rückfahrt.
     const pauseMin=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
     const rueckfahrtGesamt=backTime+pauseMin;
     if(b1 && b2){
-      if(b2.value) b1.value=addMinutesToTime(b2.value,-rueckfahrtGesamt);
-      else if(b1.value) b2.value=addMinutesToTime(b1.value,rueckfahrtGesamt);
+      if(b2.value) setQuarterTime(b1, addMinutesToTime(b2.value,-rueckfahrtGesamt));
+      else if(b1.value) setQuarterTime(b2, addMinutesToTime(b1.value,rueckfahrtGesamt));
     }
   }
 
@@ -1017,7 +1060,7 @@ function clearPdfForm(form){
     try{ form.updateFieldAppearances(); }catch(e){}
   }catch(e){}
 }
-function ls(t){return t.split(/\\r?\\n/).map(x=>x.trim()).filter(Boolean)}
+function ls(t){return String(t||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean)}
 
 function minutesBetween(a,b){
   if(!a||!b)return 0;
@@ -1056,7 +1099,7 @@ function syncVisibleDaysFromDOM(){
 }
 function recalcTimes(){
   syncVisibleDaysFromDOM();
-  let travel=0,work=0,km=0;
+  let travel=0,work=0,km=0,pauses=0;
   for(let d=1;d<=Math.max(1,Number(visibleDays)||1);d++){
     const a=d*2-1,b=d*2;
     const box=dayBoxEl(d);
@@ -1065,35 +1108,39 @@ function recalcTimes(){
     const backOverride=box?.querySelector('[data-route-override="back"]');
 
     const pauseOut=pauseMinutes(q(`PauseRZ${a}`).value);
+    const pauseWork=pauseMinutes(q(`PauseAZ${a}`).value);
     const pauseBack=pauseMinutes(q(`PauseRZ${b}`).value);
 
     let rt;
     if(outOverride && String(outOverride.value).trim()!==""){
       rt=Math.max(0,parseInt(outOverride.value,10)||0);
     }else{
-      rt=Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseOut);
+      const routeMin=travelMinutesForDay(d,"out");
+      rt=routeMin>0 ? routeMin : Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseOut);
     }
 
     let rr;
     if(backOverride && String(backOverride.value).trim()!==""){
       rr=Math.max(0,parseInt(backOverride.value,10)||0);
     }else{
-      rr=Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack);
+      const routeMin=travelMinutesForDay(d,"back");
+      rr=routeMin>0 ? routeMin : Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack);
     }
 
-    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseMinutes(q(`PauseAZ${a}`).value));
+    const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseWork);
 
-    travel+=rt+rr; work+=wt;
+    travel+=rt+rr; work+=wt; pauses+=pauseOut+pauseWork+pauseBack;
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
 
     const sc=(name,val)=>{const el=box?.querySelector(`[data-calc="${name}"]`)||document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
+    // Day "Gesamtzeit netto" stays without pauses; bottom Gesamtzeit includes them.
     sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr);
   }
   if($("travelTotal"))$("travelTotal").value=fmtMin(travel);
   if($("workTotal"))$("workTotal").value=fmtMin(work);
   if($("kmTotal"))$("kmTotal").value=String(Math.round(km*10)/10).replace(".",",");
-  if($("allTotal"))$("allTotal").value=fmtMin(travel+work);
+  if($("allTotal"))$("allTotal").value=fmtMin(travel+work+pauses);
 }
 // Auswahlfelder: innerhalb jeder Gruppe nur eine Option gleichzeitig.
 function syncChoiceVisual(el){
@@ -1143,15 +1190,6 @@ function bindTimeInputs(){
         const val=isEmpty ? (el.dataset.routeOverride==="out"?outMin:backMin) : Math.max(0,parseInt(el.value,10)||0);
 
         if(el.dataset.routeOverride==="out"){
-          const a1=field("RZstart",outRow), a2=field("RZende",outRow);
-          const pause=field("PauseRZ",outRow);
-          const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
-          if(a1&&a2&&val>0){
-            const elapsed=val+pauseMin;
-            // Override Anfahrt: Ankunft beibehalten, Abfahrt inkl. Pause anpassen.
-            if(a2.value) a1.value=addMinutesToTime(a2.value,-elapsed);
-            else if(a1.value) a2.value=addMinutesToTime(a1.value,elapsed);
-          }
           if(isEmpty){
             el.dataset.manual="0";
             el.removeAttribute("data-manual");
@@ -1159,14 +1197,16 @@ function bindTimeInputs(){
           }else{
             el.dataset.manual="1";
           }
+          // Ankunft beibehalten, Abfahrt inkl. Pause; Netto = Override/Liste.
+          if(val>0) applyAnfahrtPauseClock(d);
         }else{
           const b1=field("RZstart",backRow), b2=field("RZende",backRow);
           const pause=field("PauseRZ",backRow);
           const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
           const elapsed=val+pauseMin;
           if(b1&&b2&&val>0){
-            if(b1.value) b2.value=addMinutesToTime(b1.value,elapsed);
-            else if(b2.value) b1.value=addMinutesToTime(b2.value,-elapsed);
+            if(b1.value) setQuarterTime(b2, addMinutesToTime(b1.value,elapsed));
+            else if(b2.value) setQuarterTime(b1, addMinutesToTime(b2.value,-elapsed));
           }
           if(isEmpty){
             el.dataset.manual="0";
@@ -1190,38 +1230,31 @@ function bindTimeInputs(){
           const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
           const duration=outMin+pauseMin;
           // Ankunft ändern -> Abfahrt inkl. Pause. Abfahrt ändern -> Ankunft.
-          if(el===a1) a2.value=addMinutesToTime(el.value,duration);
-          else a1.value=addMinutesToTime(el.value,-duration);
+          if(el===a1) setQuarterTime(a2, addMinutesToTime(el.value,duration));
+          else setQuarterTime(a1, addMinutesToTime(el.value,-duration));
           const az=field("AZstart",outRow);
-          if(az&&a2.value&&az.dataset.manual!=="1")az.value=a2.value;
+          if(az&&a2.value&&az.dataset.manual!=="1") setQuarterTime(az, a2.value);
         }
         if(row===backRow && b1&&b2&&el.value && backMin){
           const pause=field("PauseRZ",backRow);
           const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
           const duration=backMin+pauseMin;
-          if(el===b1)b2.value=addMinutesToTime(el.value,duration);
-          else b1.value=addMinutesToTime(el.value,-duration);
+          if(el===b1) setQuarterTime(b2, addMinutesToTime(el.value,duration));
+          else setQuarterTime(b1, addMinutesToTime(el.value,-duration));
         }
       }
 
       if(key===`PauseRZ${outRow}` && outMin){
-        // Pause während Anfahrt: Abfahrt nach vorne verschieben, Ankunft beibehalten.
-        const a1=field("RZstart",outRow), a2=field("RZende",outRow);
-        const pauseMin=pauseMinutes(el.value||"0");
-        const duration=outMin+pauseMin;
-        if(a1 && a2 && a2.value) a1.value=addMinutesToTime(a2.value,-duration);
-        else if(a1 && a2 && a1.value) a2.value=addMinutesToTime(a1.value,duration);
-        const az=field("AZstart",outRow);
-        if(az && a2?.value && az.dataset.manual!=="1") az.value=a2.value;
+        applyAnfahrtPauseClock(d);
       }
       if(key===`PauseRZ${backRow}` && backMin){
         const b1=field("RZstart",backRow), b2=field("RZende",backRow);
-        if(b1 && b2 && b1.value) b2.value=addMinutesToTime(b1.value,backMin+pauseMinutes(el.value||"0"));
+        if(b1 && b2 && b1.value) setQuarterTime(b2, addMinutesToTime(b1.value,backMin+pauseMinutes(el.value||"0")));
       }
 
       if(key===`RZende${outRow}`){
         const az=field("AZstart",outRow);
-        if(az&&el.value&&az.dataset.manual!=="1")az.value=el.value;
+        if(az&&el.value&&az.dataset.manual!=="1") setQuarterTime(az, el.value);
       }
       if(key===`AZende${outRow}`){
         syncWorkEndToReturnStart(d);
@@ -1230,7 +1263,7 @@ function bindTimeInputs(){
         const ankunft=field("RZende",backRow);
         const pause=field("PauseRZ",backRow);
         const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
-        if(ankunft)ankunft.value=addMinutesToTime(el.value,backMin+pauseMin);
+        if(ankunft) setQuarterTime(ankunft, addMinutesToTime(el.value,backMin+pauseMin));
       }
 
       if(key===`AZstart${outRow}`||key===`AZende${outRow}`)el.dataset.manual="1";
@@ -1286,7 +1319,7 @@ const remarkLines=typeof remarkLinesForPdf==="function"
   : String($("remarks").value||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
 for(let i=1;i<=7;i++)set(form,"Bemerkung"+i,"");
 let p=ls($("parts").value);for(let i=1;i<=4;i++)setIf(form,"Ersatzteile "+i,p[i-1]||"");
-let km=0, travel=0, work=0;
+let km=0, travel=0, work=0, pauses=0;
 const dayBoxes=[...document.querySelectorAll("[data-daybox]")];
 for(let d=1;d<=dayBoxes.length;d++){
   const box=dayBoxes[d-1];
@@ -1313,27 +1346,30 @@ for(let d=1;d<=dayBoxes.length;d++){
   if(String(kmB).trim()!=="") setFit(form,`Kilometer${b}`,kmB,6.5);
   const outOv=box.querySelector('[data-route-override="out"]');
   const backOv=box.querySelector('[data-route-override="back"]');
+  const routeOut=travelMinutesForDay(d,"out");
+  const routeBack=travelMinutesForDay(d,"back");
   const rt=outOv && String(outOv.value).trim()!==""
     ? Math.max(0,parseInt(outOv.value,10)||0)
-    : Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseOut);
+    : (routeOut>0 ? routeOut : Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseOut));
   const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseWork);
   const rr=backOv && String(backOv.value).trim()!==""
     ? Math.max(0,parseInt(backOv.value,10)||0)
-    : Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack);
+    : (routeBack>0 ? routeBack : Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack));
   if(rt) setFit(form,`RZ${a}`,fmtMinPdf(rt),7);
   if(wt) setFit(form,`AZ${a}`,fmtMinPdf(wt),7);
   if(rr) setFit(form,`RZ${b}`,fmtMinPdf(rr),7);
   km+=(parseFloat((kmA||"").replace(",","."))||0);
   km+=(parseFloat((kmB||"").replace(",","."))||0);
-  travel+=rt+rr;work+=wt;
+  travel+=rt+rr;work+=wt;pauses+=pauseOut+pauseWork+pauseBack;
 }
 if(km) setFit(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","),8);
 if(travel) setFit(form,"Reisezeit gesamt",fmtMinPdf(travel),8);
 if(work) setFit(form,"Arbeitszeit gesamt",fmtMinPdf(work),8);
-if(travel||work) setFit(form,"Gesamtzeit",fmtMinPdf(travel+work),8);
+// Gesamtzeit = Reise + Arbeit + alle Pausen
+if(travel||work||pauses) setFit(form,"Gesamtzeit",fmtMinPdf(travel+work+pauses),8);
 
 const pdfHasContent=!!(
-  c || firmaName() || r.length || p.length || km || travel || work || bet || ein || art ||
+  c || firmaName() || remarkLines.length || p.length || km || travel || work || bet || ein || art ||
   document.getElementById("maschine_ok")?.checked ||
   ["street","city","contact","manufacturer","type","machineNo","control","nc","plc","fault","hours","tech","customersign"]
     .some(id=>String($(id)?.value||"").trim())
@@ -1925,6 +1961,11 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
       const previousBlob=lastPdfBlob;
     const finish=async()=>{
       if(lastPdfBlob===previousBlob){
+        if(++tries>=150){
+          const s=document.getElementById("status");
+          if(s) s.textContent="PDF konnte nicht erstellt werden.";
+          return;
+        }
         setTimeout(finish,100);
         return;
       }
