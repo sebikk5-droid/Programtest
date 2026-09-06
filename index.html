@@ -1360,8 +1360,8 @@ for(let d=1;d<=dayBoxes.length;d++){
   const dateIso=dateEl?.value || (hasTimes ? isoAddDays($("date")?.value||"",d-1) : "");
   const date=pdfDate(dateIso);
   if(date){
+    // One date per calendar day — first row only (Anfahrt/Arbeit), not again on Rückfahrt.
     setFit(form,`Datum${a}`,date,5.5);
-    setFit(form,`Datum${b}`,date,5.5);
   }
   ["RZstart","RZende","AZstart","AZende"].forEach(k=>{ if(filledTime(q(`${k}${a}`).value)) setFit(form,`${k}${a}`,q(`${k}${a}`).value,7); });
   ["RZstart","RZende"].forEach(k=>{ if(filledTime(q(`${k}${b}`).value)) setFit(form,`${k}${b}`,q(`${k}${b}`).value,7); });
