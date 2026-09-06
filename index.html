@@ -2024,11 +2024,9 @@ try{
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
   }
   function reportPayload(item){
-    const pad=n=>String(n).padStart(2,"0");
-    const now=new Date();
-    const dateToday=`${pad(now.getDate())}.${pad(now.getMonth()+1)}.${now.getFullYear()}`;
-    const companyName=(item.name||"Bericht").trim().replace(/[\\/:*?"<>|]/g,"_");
-    const filename=`${companyName}_${dateToday}.json`;
+    const label=historyListLabel(item);
+    const companyName=label.replace(/[\/:*?"<>|]+/g,"_").replace(/\s+/g,"_");
+    const filename=`${companyName||"Bericht"}.json`;
     const json=JSON.stringify({
       format:"Servicebericht-Historie",
       version:1,
