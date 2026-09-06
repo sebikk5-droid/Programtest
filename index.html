@@ -2005,6 +2005,7 @@ try{
       const label=el.closest(".choice-opt");
       if(label) label.classList.toggle("is-on", !!el.checked);
     });
+    if(typeof syncClientRouteFields==="function") syncClientRouteFields();
   }
   window.__sbCollectForm=collectForm;
   window.__sbApplyForm=applyForm;
