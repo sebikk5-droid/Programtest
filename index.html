@@ -247,16 +247,19 @@ body.app-locked #appLock{display:flex}
 <div id="customerSearchResults" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid #bbb;border-radius:8px;max-height:240px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15);"></div>
 </div>
 <select id="company" autocomplete="off"><option value="">— Firma auswählen —</option></select>
-<div id="clientRouteBox" style="margin:8px 0 4px;padding:10px 12px;background:#f7f7f8;border:1px solid #e5e5ea;border-radius:12px">
-  <div class="muted" style="margin:0 0 8px">Fahrzeit & km aus der Kundenliste – hier ändern und speichern</div>
+<div id="clientRouteBox" style="margin:8px 0 2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <div class="muted" id="clientRouteNote" style="margin:0;flex:1;min-width:140px">Route: —</div>
+  <button type="button" id="clientRouteEditBtn" style="flex:0 0 auto;min-width:88px;padding:8px 12px;border-radius:10px;background:#fff;border:1px solid #d1d1d6;color:#111;font-size:13px;font-weight:700" disabled>Bearbeiten</button>
+</div>
+<div id="clientRouteEditPanel" style="display:none;margin:6px 0 4px;padding:10px 12px;background:#f7f7f8;border:1px solid #e5e5ea;border-radius:12px">
   <div class="grid" style="margin:0">
-    <div><label for="clientKm">Kilometer</label><input id="clientKm" type="number" inputmode="decimal" step="0.1" min="0" placeholder="z. B. 115" disabled></div>
-    <div><label for="clientHours">Fahrzeit (Stunden)</label><input id="clientHours" type="number" inputmode="decimal" step="0.25" min="0" placeholder="z. B. 1,75" disabled></div>
+    <div><label for="clientKm">Kilometer</label><input id="clientKm" type="number" inputmode="decimal" step="0.1" min="0" placeholder="z. B. 115"></div>
+    <div><label for="clientHours">Fahrzeit (Stunden)</label><input id="clientHours" type="number" inputmode="decimal" step="0.25" min="0" placeholder="z. B. 1,75"></div>
   </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:stretch">
-    <button type="button" id="clientRouteSave" style="flex:1;min-width:160px;padding:12px;border-radius:12px;background:#e5e5ea;color:#111;font-size:15px;font-weight:700;border:0" disabled>In Kundenliste speichern</button>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+    <button type="button" id="clientRouteSave" style="flex:1;min-width:120px;padding:11px;border-radius:12px;background:#e5e5ea;color:#111;font-size:14px;font-weight:700;border:0">Speichern</button>
+    <button type="button" id="clientRouteCancel" style="flex:0 0 auto;min-width:100px;padding:11px;border-radius:12px;background:#fff;border:1px solid #d1d1d6;color:#111;font-size:14px;font-weight:700">Abbrechen</button>
   </div>
-  <div class="muted" id="clientRouteHint" style="margin-top:8px">Zuerst Firma auswählen.</div>
 </div>
 <div id="companiesLocalBox" style="margin:10px 0 4px;padding:10px 12px;background:#f7f7f8;border:1px solid #e5e5ea;border-radius:12px">
   <div class="muted" id="companiesStatus" style="margin:0">Keine lokale Firmenliste – bitte Datei wählen</div>
