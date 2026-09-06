@@ -1,4 +1,4 @@
-const CACHE_NAME = "servicebericht-v27-6-80";
+const CACHE_NAME = "servicebericht-v1-1";
 const APP_SHELL = [
   "./",
   "./index.html",
