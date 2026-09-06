@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.9</div>
+      <div class="credit">Created by S. Pawlina v1.10</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -1114,6 +1114,7 @@ function applyCompanies(list, meta){
     setCompaniesStatus("Keine lokale Firmenliste – bitte Datei wählen");
   }
   restorePdfReturnStateIfNeeded();
+  if(typeof window.__sbRestoreSwDraftIfNeeded==="function") window.__sbRestoreSwDraftIfNeeded();
 }
 function loadCompanies(){
   const stored=readStoredCompanies();
@@ -1128,6 +1129,7 @@ function loadCompanies(){
   companiesReady=true;
   setCompaniesStatus("Keine lokale Firmenliste – bitte Datei wählen");
   restorePdfReturnStateIfNeeded();
+  if(typeof window.__sbRestoreSwDraftIfNeeded==="function") window.__sbRestoreSwDraftIfNeeded();
 }
 async function importCompaniesFromFile(file){
   if(!file) return;
@@ -1692,7 +1694,7 @@ try{
   const fname=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
   if(typeof shareOrDownloadPdf==="function"){
     const how=await shareOrDownloadPdf(lastPdfBlob, fname);
-    if(how==="shared") $("status").textContent="PDF geteilt – in Dateien sichern.";
+    if(how==="shared" || how==="done") $("status").textContent="PDF geteilt – in Dateien sichern.";
     else if(how==="saved") $("status").textContent="PDF wurde gespeichert.";
     else if(how==="aborted") $("status").textContent="Speichern abgebrochen – bitte erneut tippen.";
     else if(how==="busy") $("status").textContent="PDF wird bereits gespeichert…";
@@ -1711,10 +1713,34 @@ try{
 <script>
 (function(){
   const HISTORY_KEY="servicebericht_history_v26";
-  const SKIP_IDS={historySelect:1,travelTotal:1,workTotal:1,kmTotal:1,allTotal:1};
+  const SKIP_IDS={
+    historySelect:1,travelTotal:1,workTotal:1,kmTotal:1,allTotal:1,
+    appLockPassword:1,companiesFile:1,historyFileInput:1
+  };
 
+  function scrubSensitive(data){
+    if(!data || typeof data!=="object") return data;
+    delete data.appLockPassword;
+    delete data.companiesFile;
+    delete data.historyFileInput;
+    return data;
+  }
   function loadHistory(){
-    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]"); }
+    try {
+      const list=JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]");
+      if(!Array.isArray(list)) return [];
+      let dirty=false;
+      list.forEach(item=>{
+        if(item && item.data && item.data.appLockPassword!=null){
+          scrubSensitive(item.data);
+          dirty=true;
+        }
+      });
+      if(dirty){
+        try{ saveHistory(list); }catch(e){}
+      }
+      return list;
+    }
     catch(e){ return []; }
   }
   function saveHistory(list){
@@ -1725,6 +1751,8 @@ try{
     }
   }
   function fieldKey(el){
+    if(!el) return "";
+    if(el.type==="password" || el.type==="file") return "";
     if(el.id && SKIP_IDS[el.id]) return "";
     const box=el.closest("[data-daybox]");
     const day=box ? box.getAttribute("data-daybox") : null;
@@ -1753,7 +1781,7 @@ try{
       const d=box.getAttribute("data-daybox");
       data[`day${d}_collapsed`]=box.classList.contains("day-collapsed");
     });
-    return data;
+    return scrubSensitive(data);
   }
   function findField(key){
     let el=document.querySelector(`[data-k="${CSS.escape(key)}"]`);
@@ -1777,6 +1805,7 @@ try{
   }
   function applyForm(data){
     if(!data || typeof data!=="object") return;
+    scrubSensitive(data);
     const target=Math.max(1,Math.min(6,Number(data.__visibleDays)||1));
     const times=document.getElementById("times");
     const addBtn=document.getElementById("addDay");
@@ -2182,6 +2211,7 @@ try{
 <script>
 
 let pdfHandoffBusy=false;
+let pdfHandoffDoneFor=null;
 function ensurePdfFileName(filename){
   let name=String(filename||"Servicebericht.pdf").trim()||"Servicebericht.pdf";
   name=name.replace(/[\\/:*?"<>|]+/g,"_");
@@ -2191,6 +2221,8 @@ function ensurePdfFileName(filename){
 async function shareOrDownloadPdf(blob, filename){
   if(!blob) return false;
   if(pdfHandoffBusy) return "busy";
+  // Same PDF blob must not open a second share/save sheet (iPad race).
+  if(pdfHandoffDoneFor===blob) return "done";
   pdfHandoffBusy=true;
   try{
   const name=ensurePdfFileName(filename);
@@ -2204,6 +2236,11 @@ async function shareOrDownloadPdf(blob, filename){
   const preferShare=/iPad|iPhone|iPod/.test(navigator.userAgent||"")
     || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
 
+  function markDone(how){
+    if(how==="shared" || how==="saved" || how==="download") pdfHandoffDoneFor=blob;
+    return how;
+  }
+
   if(!preferShare){
     if(window.showSaveFilePicker){
       try{
@@ -2214,7 +2251,7 @@ async function shareOrDownloadPdf(blob, filename){
         const w=await handle.createWritable();
         await w.write(pdfBlob);
         await w.close();
-        return "saved";
+        return markDone("saved");
       }catch(e){
         if(e && e.name==="AbortError") return "aborted";
         // Only download if the picker itself failed — never after a successful save.
@@ -2225,13 +2262,13 @@ async function shareOrDownloadPdf(blob, filename){
     a.href=url; a.download=name; a.rel="noopener"; a.style.display="none";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),5000);
-    return "download";
+    return markDone("download");
   }
 
   try{
     if(navigator.canShare && navigator.canShare({files:[file]}) && navigator.share){
       await navigator.share({files:[file], title:name});
-      return "shared";
+      return markDone("shared");
     }
   }catch(e){
     if(e && e.name==="AbortError") return "aborted";
@@ -2245,7 +2282,7 @@ async function shareOrDownloadPdf(blob, filename){
       const w=await handle.createWritable();
       await w.write(pdfBlob);
       await w.close();
-      return "saved";
+      return markDone("saved");
     }
   }catch(e){
     if(e && e.name==="AbortError") return "aborted";
@@ -2255,7 +2292,7 @@ async function shareOrDownloadPdf(blob, filename){
   a.href=url; a.download=name; a.rel="noopener"; a.style.display="none";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),5000);
-  return "download";
+  return markDone("download");
   }finally{
     pdfHandoffBusy=false;
   }
@@ -2295,7 +2332,7 @@ async function shareOrDownloadPdf(blob, filename){
           const filename=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
           const how=await shareOrDownloadPdf(lastPdfBlob, filename);
           if(st){
-            if(how==="shared") st.textContent="PDF geteilt – in Dateien sichern.";
+            if(how==="shared" || how==="done") st.textContent="PDF geteilt – in Dateien sichern.";
             else if(how==="saved") st.textContent="PDF wurde gespeichert.";
             else if(how==="aborted") st.textContent="Speichern abgebrochen.";
             else if(how==="busy") return;
@@ -2349,6 +2386,7 @@ async function shareOrDownloadPdf(blob, filename){
       return;
     }
     setUnlocked(true);
+    if(pw) pw.value="";
     showApp(true);
   }
   function lockNow(){
@@ -2375,8 +2413,9 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.9";
+  const APP_VERSION="1.10";
   const VERSION_KEY="servicebericht_app_version_v1";
+  const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
 
   try{
     const prev=localStorage.getItem(VERSION_KEY);
@@ -2389,41 +2428,94 @@ async function shareOrDownloadPdf(blob, filename){
     localStorage.setItem(VERSION_KEY, APP_VERSION);
   }catch(e){}
 
-  if(!("serviceWorker" in navigator)) return;
+  function saveSwDraft(){
+    try{
+      if(typeof window.__sbCollectForm!=="function") return;
+      sessionStorage.setItem(SW_DRAFT_KEY, JSON.stringify(window.__sbCollectForm()));
+    }catch(e){}
+  }
+  function restoreSwDraftIfNeeded(){
+    try{
+      const raw=sessionStorage.getItem(SW_DRAFT_KEY);
+      if(!raw) return false;
+      if(typeof window.__sbApplyForm!=="function") return false;
+      // Wait until Firmenliste options exist so company index still matches.
+      if(typeof companiesReady!=="undefined" && !companiesReady) return false;
+      const data=JSON.parse(raw);
+      sessionStorage.removeItem(SW_DRAFT_KEY);
+      window.__sbApplyForm(data);
+      return true;
+    }catch(e){
+      try{ sessionStorage.removeItem(SW_DRAFT_KEY); }catch(err){}
+      return false;
+    }
+  }
+  window.__sbRestoreSwDraftIfNeeded=restoreSwDraftIfNeeded;
+
+  function formLooksDirty(){
+    try{
+      if(typeof formLooksEmptyForRestore==="function") return !formLooksEmptyForRestore();
+    }catch(e){}
+    return false;
+  }
+
+  if(!("serviceWorker" in navigator)){
+    window.addEventListener("load", function(){ restoreSwDraftIfNeeded(); });
+    return;
+  }
 
   let refreshing=false;
+  let pendingWorker=null;
+
+  function activatePending(){
+    if(!pendingWorker) return;
+    const sw=pendingWorker;
+    pendingWorker=null;
+    saveSwDraft();
+    try{ sw.postMessage({type:"SKIP_WAITING"}); }catch(e){}
+  }
+
   navigator.serviceWorker.addEventListener("controllerchange", function(){
     if(refreshing) return;
     refreshing=true;
+    saveSwDraft();
     location.reload();
   });
 
   function watchRegistration(reg){
     if(!reg) return;
-    // Ask for a fresh SW ASAP (do not wait up to 24h).
     try{ reg.update(); }catch(e){}
-    // While the app stays open on the iPad, keep checking.
+    // Soft polling only – do not hammer updates while filling a report.
     setInterval(function(){
       try{ reg.update(); }catch(e){}
-    }, 30000);
+    }, 300000);
     document.addEventListener("visibilitychange", function(){
       if(document.visibilityState==="visible"){
         try{ reg.update(); }catch(e){}
+        restoreSwDraftIfNeeded();
+      }else{
+        // Leaving the app: safe moment to apply a waiting update.
+        activatePending();
       }
     });
     reg.addEventListener("updatefound", function(){
       const sw=reg.installing;
       if(!sw) return;
       sw.addEventListener("statechange", function(){
-        if(sw.state==="installed" && navigator.serviceWorker.controller){
-          // Activate immediately so controllerchange → reload.
-          try{ sw.postMessage({type:"SKIP_WAITING"}); }catch(e){}
+        if(sw.state!=="installed" || !navigator.serviceWorker.controller) return;
+        if(formLooksDirty()){
+          // Keep editing – activate later when the app is backgrounded.
+          pendingWorker=sw;
+          return;
         }
+        saveSwDraft();
+        try{ sw.postMessage({type:"SKIP_WAITING"}); }catch(e){}
       });
     });
   }
 
   window.addEventListener("load", function(){
+    restoreSwDraftIfNeeded();
     navigator.serviceWorker.register("./sw.js")
       .then(watchRegistration)
       .catch(function(err){ console.warn("Service Worker:", err); });
