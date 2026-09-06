@@ -898,10 +898,8 @@ function applyCustomerRouteDay1(){
 
   const info=document.getElementById("routeInfo1");
   if(info){
-    const pauseOutEl=document.querySelector('[data-k="PauseRZ1"]');
-    const pauseOutShown=pauseOutEl ? pauseMinutes(pauseOutEl.value||"0") : 0;
-    const pauseShown=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
-    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Anfahrt: ${fmtMin(r.minutes)} + ${pauseOutShown} Min Pause. Rückfahrt: ${fmtMin(r.minutes)} + ${pauseShown} Min Pause.`;
+    // Only list km/Fahrzeit — Pause is entered in the fields and must not show a stale "0".
+    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)}`;
   }
   recalcTimes();
 }
@@ -945,9 +943,7 @@ function applyCustomerRouteDay(d){
 
   const info=box?.querySelector(`#routeInfo${d}`);
   if(info){
-    const pauseOutShown=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
-    const pauseShown=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
-    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Anfahrt: ${fmtMin(r.minutes)} + ${pauseOutShown} Min Pause. Rückfahrt: ${fmtMin(r.minutes)} + ${pauseShown} Min Pause.`;
+    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)}`;
   }
   recalcTimes();
 }
