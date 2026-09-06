@@ -185,13 +185,58 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
   padding:7px 10px;
   font-size:14px;
 }
+body.app-locked > header,
+body.app-locked > main,
+body.app-locked > .bottom{visibility:hidden;pointer-events:none}
+#appLock{
+  position:fixed;inset:0;z-index:10000;
+  display:none;
+  align-items:center;justify-content:center;
+  padding:24px 18px calc(24px + env(safe-area-inset-bottom));
+  background:linear-gradient(160deg,#0f2740 0%,#1a3f63 55%,#24527d 100%);
+}
+body.app-locked #appLock{display:flex}
+.app-lock-card{
+  width:min(420px,100%);
+  background:#fff;
+  border-radius:18px;
+  padding:22px 20px 18px;
+  box-shadow:0 18px 50px rgba(0,0,0,.28);
+}
+.app-lock-card h1{font-size:22px;margin:0 0 6px;color:#163a5c}
+.app-lock-card .lock-note{font-size:13px;color:#666;margin:0 0 14px;line-height:1.35}
+.app-lock-card label{margin-top:0}
+.app-lock-card input[type=password]{letter-spacing:.08em}
+.app-lock-actions{display:flex;gap:8px;margin-top:14px}
+.app-lock-actions button{flex:1}
+.app-lock-error{min-height:18px;margin-top:8px;font-size:13px;color:#b00020}
+.header-lock-btn{
+  border:0;background:#eef2f6;color:#163a5c;
+  border-radius:9px;padding:6px 10px;font-size:12px;font-weight:700;
+  cursor:pointer;flex:0 0 auto;margin-top:2px;
+}
 </style>
 </head>
-<body>
+<body class="app-locked">
+<div id="appLock" role="dialog" aria-modal="true" aria-labelledby="appLockTitle">
+  <div class="app-lock-card">
+    <h1 id="appLockTitle">Servicebericht</h1>
+    <p class="lock-note">Bitte Passwort eingeben, um die App zu öffnen.</p>
+    <label for="appLockPassword">Passwort</label>
+    <input id="appLockPassword" type="password" autocomplete="current-password" enterkeyhint="go">
+    <div class="app-lock-actions">
+      <button type="button" class="go" id="appLockSubmit">Entsperren</button>
+    </div>
+    <div class="app-lock-error" id="appLockError" aria-live="polite"></div>
+  </div>
+</div>
 <header>
   <div class="header-top">
     <h1>Servicebericht</h1>
-    <div class="credit">Created by S. Pawlina v1.4</div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
+      <div class="credit">Created by S. Pawlina v1.5</div>
+      <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
+    </div>
   </div>
   <div class="muted">Servicebericht auf dem iPad ausfüllen</div>
 </header>
@@ -2123,6 +2168,64 @@ async function shareOrDownloadPdf(blob, filename){
   if(document.readyState==="loading")
     document.addEventListener("DOMContentLoaded",installCombined);
   else installCombined();
+})();
+</script>
+
+<script>
+(function(){
+  // Passwort hier ändern. Hinweis: Client-Schutz gegen normales Öffnen, nicht gegen IT-Analyse.
+  const APP_PASSWORD="Service2026";
+  const UNLOCK_KEY="servicebericht_unlocked_v1";
+
+  function isUnlocked(){
+    try{ return sessionStorage.getItem(UNLOCK_KEY)==="1"; }catch(e){ return false; }
+  }
+  function setUnlocked(on){
+    try{
+      if(on) sessionStorage.setItem(UNLOCK_KEY,"1");
+      else sessionStorage.removeItem(UNLOCK_KEY);
+    }catch(e){}
+  }
+  function showApp(unlocked){
+    document.body.classList.toggle("app-locked", !unlocked);
+    const err=document.getElementById("appLockError");
+    const pw=document.getElementById("appLockPassword");
+    if(err) err.textContent="";
+    if(!unlocked && pw){
+      pw.value="";
+      setTimeout(()=>pw.focus(),50);
+    }
+  }
+  function tryUnlock(){
+    const pw=document.getElementById("appLockPassword");
+    const err=document.getElementById("appLockError");
+    const value=String(pw?.value||"");
+    if(value!==APP_PASSWORD){
+      if(err) err.textContent="Falsches Passwort.";
+      if(pw){ pw.value=""; pw.focus(); }
+      return;
+    }
+    setUnlocked(true);
+    showApp(true);
+  }
+  function lockNow(){
+    setUnlocked(false);
+    showApp(false);
+  }
+  function initLock(){
+    showApp(isUnlocked());
+    document.getElementById("appLockSubmit")?.addEventListener("click", tryUnlock);
+    document.getElementById("appLockNow")?.addEventListener("click", lockNow);
+    document.getElementById("appLockPassword")?.addEventListener("keydown", e=>{
+      if(e.key==="Enter"){
+        e.preventDefault();
+        tryUnlock();
+      }
+    });
+  }
+  if(document.readyState==="loading")
+    document.addEventListener("DOMContentLoaded", initLock);
+  else initLock();
 })();
 </script>
 
