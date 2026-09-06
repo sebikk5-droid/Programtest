@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.11</div>
+      <div class="credit">Created by S. Pawlina v1.12</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -688,21 +688,13 @@ function updateDayRouteNetto(d){
   const outOverride=box.querySelector('[data-route-override="out"]');
   const backOverride=box.querySelector('[data-route-override="back"]');
   if(rt){
-    // Netto = Listen-/Override-Fahrzeit — Pause ändert die Uhr, nicht das Netto.
-    // Without Listenzeit: keep pureOutMin in sync with the live clock span.
+    // Netto = Listenzeit aus Firmenliste (oder Override) — Pause ändert nur die Uhr.
     const routeMin=travelMinutesForDay(d,"out");
-    let v;
-    if(outOverride && outOverride.value!==""){
-      v=Math.max(0,parseInt(outOverride.value,10)||0);
-    }else if(routeMin>0){
-      v=routeMin;
-      box.dataset.pureOutMin=String(v);
-    }else if(a1?.value && a2?.value){
-      v=Math.max(0,minutesBetween(a1.value,a2.value)-pauseMinutes(pa?.value||"0"));
-      box.dataset.pureOutMin=String(v);
-    }else{
-      v=Math.max(0,parseInt(box.dataset.pureOutMin||"0",10)||0);
-    }
+    const pureOut=routeMin>0 ? routeMin : Math.max(0,parseInt(box.dataset.pureOutMin||"0",10)||0);
+    const v=outOverride && outOverride.value!==""
+      ? Math.max(0,parseInt(outOverride.value,10)||0)
+      : (pureOut>0 ? pureOut : Math.max(0,minutesBetween(a1?.value||"",a2?.value||"")-pauseMinutes(pa?.value||"0")));
+    if(routeMin>0) box.dataset.pureOutMin=String(routeMin);
     rt.value=fmtMin(v);
   }
   if(rr){
@@ -1313,17 +1305,10 @@ function recalcTimes(){
       rt=Math.max(0,parseInt(outOverride.value,10)||0);
     }else{
       const routeMin=travelMinutesForDay(d,"out");
-      const a1=q(`RZstart${a}`).value, a2=q(`RZende${a}`).value;
-      if(routeMin>0){
-        rt=routeMin;
-        if(box) box.dataset.pureOutMin=String(rt);
-      }else if(a1 && a2){
-        // Live clocks beat a stale pureOutMin after manual edits.
-        rt=Math.max(0,minutesBetween(a1,a2)-pauseOut);
-        if(box) box.dataset.pureOutMin=String(rt);
-      }else{
-        rt=Math.max(0,parseInt(box?.dataset.pureOutMin||"0",10)||0);
-      }
+      // Anfahrt-Netto immer aus Kundenliste (Listenzeit), nicht aus der Uhrspanne.
+      const pureOut=routeMin>0 ? routeMin : Math.max(0,parseInt(box?.dataset.pureOutMin||"0",10)||0);
+      if(routeMin>0 && box) box.dataset.pureOutMin=String(routeMin);
+      rt=pureOut>0 ? pureOut : Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseOut);
     }
 
     let rr;
@@ -1470,21 +1455,17 @@ function bindTimeInputs(){
         return;
       }
 
-      if(m && (m[1]==="RZstart" || m[1]==="RZende") && (outMin || backMin || row===outRow || row===backRow)){
+      if(m && (m[1]==="RZstart" || m[1]==="RZende") && (outMin || backMin)){
         const a1=field("RZstart",outRow),a2=field("RZende",outRow);
         const b1=field("RZstart",backRow),b2=field("RZende",backRow);
-        if(row===outRow && a1&&a2&&el.value){
+        if(row===outRow && a1&&a2&&el.value && outMin){
           const pause=field("PauseRZ",outRow);
           const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
-          if(outMin){
-            const duration=outMin+pauseMin;
-            // Ankunft ändern -> Abfahrt inkl. Pause. Abfahrt ändern -> Ankunft.
-            if(el===a1) setQuarterTime(a2, addMinutesToTime(el.value,duration));
-            else setQuarterTime(a1, addMinutesToTime(el.value,-duration));
-          }else if(a1.value && a2.value){
-            // No Listenzeit: manual clocks define the new pure drive time.
-            box.dataset.pureOutMin=String(Math.max(0,minutesBetween(a1.value,a2.value)-pauseMin));
-          }
+          const duration=outMin+pauseMin;
+          // Ankunft ändern -> Abfahrt inkl. Pause. Abfahrt ändern -> Ankunft.
+          // Netto bleibt Listenzeit (outMin), Uhrspanne = Listenzeit + Pause.
+          if(el===a1) setQuarterTime(a2, addMinutesToTime(el.value,duration));
+          else setQuarterTime(a1, addMinutesToTime(el.value,-duration));
           const az=field("AZstart",outRow);
           if(az&&a2.value&&az.dataset.manual!=="1") setQuarterTime(az, a2.value);
         }
@@ -2480,7 +2461,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.11";
+  const APP_VERSION="1.12";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
 
