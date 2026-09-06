@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.14</div>
+      <div class="credit">Created by S. Pawlina v1.15</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -858,26 +858,29 @@ function formatRouteNote(km, minutes){
   const hStr=formatRouteHours(minutes).replace(".",",");
   return `${kmStr}km, ${hStr}`;
 }
+function setClientRouteEditOpen(open){
+  const panel=$("clientRouteEditPanel");
+  if(panel) panel.style.display=open?"block":"none";
+}
 function syncClientRouteFields(){
   const kmEl=$("clientKm");
   const hEl=$("clientHours");
-  const saveBtn=$("clientRouteSave");
-  const hint=$("clientRouteHint");
+  const editBtn=$("clientRouteEditBtn");
+  const note=$("clientRouteNote");
   const c=selectedCompany();
   const enable=!!c;
-  if(kmEl) kmEl.disabled=!enable;
-  if(hEl) hEl.disabled=!enable;
-  if(saveBtn) saveBtn.disabled=!enable;
+  if(editBtn) editBtn.disabled=!enable;
   if(!enable){
     if(kmEl) kmEl.value="";
     if(hEl) hEl.value="";
-    if(hint) hint.textContent="Zuerst Firma auswählen.";
+    if(note) note.textContent="Route: —";
+    setClientRouteEditOpen(false);
     return;
   }
   const r=parseRoute(c);
   if(kmEl) kmEl.value=r.km>0 ? String(Math.round(r.km*10)/10) : "";
   if(hEl) hEl.value=r.minutes>0 ? formatRouteHours(r.minutes) : "";
-  if(hint) hint.textContent=`Aktuell in Liste: ${formatRouteNote(r.km,r.minutes)} · nur lokal auf diesem iPad`;
+  if(note) note.textContent=`Route: ${formatRouteNote(r.km,r.minutes)}`;
 }
 function saveClientRouteToList(){
   const c=selectedCompany();
@@ -912,19 +915,36 @@ function saveClientRouteToList(){
     alert("Konnte nicht speichern: "+(e?.message||e));
     return;
   }
+  setClientRouteEditOpen(false);
   syncClientRouteFields();
   applyCustomerRouteDay1();
   for(let d=2;d<=visibleDays;d++) applyCustomerRouteDay(d);
   recalcTimes();
-  const hint=$("clientRouteHint");
-  if(hint) hint.textContent=`Gespeichert: ${updated[noteKey]} · lokal aktualisiert`;
   setCompaniesStatus(`Lokale Liste: ${companies.length} Firmen · Route für ${c.firma||c.name||"Firma"} aktualisiert`);
 }
 function setupClientRouteEdit(){
+  const editBtn=$("clientRouteEditBtn");
   const saveBtn=$("clientRouteSave");
+  const cancelBtn=$("clientRouteCancel");
+  if(editBtn && editBtn.dataset.bound!=="1"){
+    editBtn.dataset.bound="1";
+    editBtn.addEventListener("click", ()=>{
+      if(!selectedCompany()) return;
+      syncClientRouteFields();
+      setClientRouteEditOpen(true);
+      $("clientKm")?.focus();
+    });
+  }
   if(saveBtn && saveBtn.dataset.bound!=="1"){
     saveBtn.dataset.bound="1";
     saveBtn.addEventListener("click", saveClientRouteToList);
+  }
+  if(cancelBtn && cancelBtn.dataset.bound!=="1"){
+    cancelBtn.dataset.bound="1";
+    cancelBtn.addEventListener("click", ()=>{
+      setClientRouteEditOpen(false);
+      syncClientRouteFields();
+    });
   }
   syncClientRouteFields();
 }
@@ -2600,7 +2620,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.14";
+  const APP_VERSION="1.15";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
 
