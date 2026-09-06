@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.16</div>
+      <div class="credit">Created by S. Pawlina v1.17</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -486,17 +486,44 @@ function clearPdfReturnState(){
 }
 function formLooksEmptyForRestore(){
   // Ignore Auswahl (localStorage) and autofill-prone fields (tech/street/city/…).
-  // Only report-specific data blocks PDF-return restore.
+  // Report-specific data blocks snapshot restore.
   if($("company")?.value) return false;
+  if(String($("customerSearch")?.value||"").trim()) return false;
   if(document.querySelector('[data-k^="RZstart"]')?.value) return false;
+  if(document.querySelector('[data-k^="RZende"]')?.value) return false;
   if(document.querySelector('[data-k^="AZstart"]')?.value) return false;
+  if(document.querySelector('[data-k^="AZende"]')?.value) return false;
   if(document.querySelector('[data-k^="PauseRZ"]')?.value) return false;
+  if(document.querySelector('[data-k^="PauseAZ"]')?.value) return false;
   if(document.querySelector('[data-k^="Kilometer"]')?.value) return false;
   if(document.querySelector("[data-daybox]:not([data-daybox='1'])")) return false;
   if(String($("fault")?.value||"").trim()) return false;
   if(String($("parts")?.value||"").trim()) return false;
   if(String($("hours")?.value||"").trim()) return false;
+  if(String($("remarks")?.value||"").trim()) return false;
+  if(String($("manufacturer")?.value||"").trim()) return false;
+  if(String($("type")?.value||"").trim()) return false;
+  if(String($("machineNo")?.value||"").trim()) return false;
+  if(String($("contact")?.value||"").trim()) return false;
   return true;
+}
+function clearCustomerRouteFields(){
+  document.querySelectorAll("[data-daybox]").forEach(box=>{
+    try{ delete box.dataset.pureOutMin; }catch(e){}
+    box.querySelectorAll('[data-k^="Kilometer"]').forEach(el=>{ el.value=""; });
+    box.querySelectorAll("[data-route-override]").forEach(el=>{
+      el.value="";
+      el.dataset.manual="0";
+      el.removeAttribute("data-manual");
+    });
+    const d=box.getAttribute("data-daybox");
+    const info=box.querySelector(`#routeInfo${d}`) || document.getElementById(`routeInfo${d}`);
+    if(info) info.textContent=d==="1"
+      ? "Nach Auswahl der Firma übernimmt Tag 1 km und Reisezeit aus der Kundenliste."
+      : "km für diesen Tag manuell eintragen. Reise- und Arbeitszeit werden automatisch berechnet.";
+  });
+  if(typeof syncClientRouteFields==="function") syncClientRouteFields();
+  if(typeof recalcTimes==="function") recalcTimes();
 }
 function restorePdfReturnStateIfNeeded(){
   try{
@@ -531,7 +558,36 @@ function restorePdfReturnStateIfNeeded(){
     return false;
   }catch(e){ return false; }
 }
-window.addEventListener("pageshow",()=>{ restorePdfReturnStateIfNeeded(); });
+function restoreFormSnapshotsIfNeeded(){
+  // One restore path: never let SW-draft overwrite a live Safari form.
+  try{
+    if(!companiesReady) return false;
+    if(typeof window.__sbApplyForm!=="function") return false;
+    const SW_KEY="servicebericht_sw_draft_v1";
+    const hasPdf=!!sessionStorage.getItem(PDF_RETURN_KEY);
+    const hasSw=!!sessionStorage.getItem(SW_KEY);
+
+    if(!formLooksEmptyForRestore()){
+      // Live form present: drop SW draft so it cannot overwrite later.
+      try{ sessionStorage.removeItem(SW_KEY); }catch(e){}
+      // Still allow company-only PDF re-attach.
+      return restorePdfReturnStateIfNeeded();
+    }
+
+    // Empty form: prefer PDF-return, else SW draft.
+    if(hasPdf){
+      const ok=restorePdfReturnStateIfNeeded();
+      try{ sessionStorage.removeItem(SW_KEY); }catch(e){}
+      return ok;
+    }
+    if(hasSw && typeof window.__sbRestoreSwDraftIfNeeded==="function"){
+      return window.__sbRestoreSwDraftIfNeeded();
+    }
+    return false;
+  }catch(e){ return false; }
+}
+window.__sbRestoreFormSnapshotsIfNeeded=restoreFormSnapshotsIfNeeded;
+window.addEventListener("pageshow",()=>{ restoreFormSnapshotsIfNeeded(); });
 window.addEventListener("pagehide",()=>{
   // Keep a fresh snapshot if the user leaves after preparing a PDF
   // (Safari may recreate the document on return).
@@ -1223,7 +1279,10 @@ function wireCompanyChangeHandler(){
     clearPdfReturnState();
 
     const c=selectedCompany();
-    if(!c)return;
+    if(!c){
+      clearCustomerRouteFields();
+      return;
+    }
     if($("customerSearch")) $("customerSearch").value=c.firma||c.name||"";
     const a=address(c.adres||c.address||"");
     if($("street")) $("street").value=a[0]||"";
@@ -1258,8 +1317,7 @@ function applyCompanies(list, meta){
   }else{
     setCompaniesStatus("Keine lokale Firmenliste – bitte Datei wählen");
   }
-  restorePdfReturnStateIfNeeded();
-  if(typeof window.__sbRestoreSwDraftIfNeeded==="function") window.__sbRestoreSwDraftIfNeeded();
+  restoreFormSnapshotsIfNeeded();
   syncClientRouteFields();
 }
 function loadCompanies(){
@@ -1274,8 +1332,7 @@ function loadCompanies(){
   wireCompanyChangeHandler();
   companiesReady=true;
   setCompaniesStatus("Keine lokale Firmenliste – bitte Datei wählen");
-  restorePdfReturnStateIfNeeded();
-  if(typeof window.__sbRestoreSwDraftIfNeeded==="function") window.__sbRestoreSwDraftIfNeeded();
+  restoreFormSnapshotsIfNeeded();
   syncClientRouteFields();
 }
 async function importCompaniesFromFile(file){
@@ -1643,7 +1700,16 @@ function bindTimeInputs(){
 bindTimeInputs();
 recalcTimes();
 
+let pdfGenerateBusy=false;
   $("generate").onclick=async()=>{
+if(pdfGenerateBusy){
+  $("status").textContent="PDF wird bereits erstellt…";
+  return;
+}
+pdfGenerateBusy=true;
+const genBtn=$("generate");
+if(genBtn) genBtn.disabled=true;
+try{
 if(typeof syncAllPauseClocks==="function") syncAllPauseClocks();
 savePdfReturnState();
 $("status").textContent="PDF wird erstellt…";
@@ -1856,6 +1922,10 @@ try{
   $("status").textContent="PDF erstellt – bitte erneut speichern.";
 }
 }catch(e){$("status").textContent="Fehler: "+e.message}
+}finally{
+  pdfGenerateBusy=false;
+  if(genBtn) genBtn.disabled=false;
+}
 };
 
 </script>
@@ -2112,18 +2182,42 @@ try{
       alert("Dieser Bericht konnte nicht geladen werden.");
       return;
     }
+    if(typeof formLooksEmptyForRestore==="function" && !formLooksEmptyForRestore()){
+      if(!confirm("Aktuellen Bericht verwerfen und gespeicherten Bericht öffnen?")){
+        sel.value="";
+        return;
+      }
+    }
     whenCompaniesReady(()=>{ applyForm(data); });
     refresh(sel.value);
     $("status").textContent="Bericht wurde geöffnet.";
+  }
+  function looksLikeHistoryItems(arr){
+    if(!Array.isArray(arr) || !arr.length) return false;
+    return arr.some(x=>x && typeof x==="object" && (x.data || x.savedAt || x.bericht || x.formData));
+  }
+  function looksLikeCompaniesList(arr){
+    if(!Array.isArray(arr) || !arr.length) return false;
+    return arr.every(x=>x && typeof x==="object" && (x.firma || x.name) && !x.data && !x.savedAt && !x.bericht);
   }
   function importPayloadText(text){
     if(!text) return;
     const payload=JSON.parse(text);
     let list=loadHistory();
     let imported=null;
-    if(Array.isArray(payload)) list=payload;
-    else if(Array.isArray(payload.history)) list=payload.history;
-    else if(payload.bericht && typeof payload.bericht==="object") imported=payload.bericht;
+    if(Array.isArray(payload)){
+      if(looksLikeCompaniesList(payload))
+        throw new Error("Das ist eine Firmenliste, keine Bericht-Historie.");
+      if(!looksLikeHistoryItems(payload))
+        throw new Error("Keine gültige Bericht-Historie gefunden.");
+      if(!confirm(`Gesamte Historie durch ${payload.length} Einträge ersetzen?`))
+        return;
+      list=payload;
+    }else if(Array.isArray(payload.history)){
+      if(!confirm(`Gesamte Historie durch ${payload.history.length} Einträge ersetzen?`))
+        return;
+      list=payload.history;
+    }else if(payload.bericht && typeof payload.bericht==="object") imported=payload.bericht;
     else if(payload.data && typeof payload.data==="object") imported=payload;
     else throw new Error("Keine gültige Bericht-Historie gefunden.");
 
@@ -2135,6 +2229,12 @@ try{
     saveHistory(list);
     refresh(imported ? "0" : "");
     if(imported){
+      if(typeof formLooksEmptyForRestore==="function" && !formLooksEmptyForRestore()){
+        if(!confirm("Aktuellen Bericht verwerfen und Datei öffnen?")){
+          $("status").textContent="In Historie gespeichert – aktueller Bericht bleibt.";
+          return;
+        }
+      }
       whenCompaniesReady(()=>{ applyForm(historyItemData(imported)); });
       $("status").textContent="Bericht wurde geöffnet.";
     }else{
@@ -2318,8 +2418,10 @@ try{
     function clearListIfManual(){
       const typed=input.value.trim();
       const current=select.selectedOptions[0];
-      if(current && current.value!=="" && current.textContent.trim()!==typed)
+      if(current && current.value!=="" && current.textContent.trim()!==typed){
         select.value="";
+        if(typeof clearCustomerRouteFields==="function") clearCustomerRouteFields();
+      }
     }
 
     function show(){
@@ -2620,7 +2722,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.16";
+  const APP_VERSION="1.17";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
 
@@ -2648,6 +2750,11 @@ async function shareOrDownloadPdf(blob, filename){
       if(typeof window.__sbApplyForm!=="function") return false;
       // Wait until Firmenliste options exist so company index still matches.
       if(typeof companiesReady!=="undefined" && !companiesReady) return false;
+      // Never overwrite a live form (Safari restore / user input).
+      if(typeof formLooksEmptyForRestore==="function" && !formLooksEmptyForRestore()){
+        sessionStorage.removeItem(SW_DRAFT_KEY);
+        return false;
+      }
       const data=JSON.parse(raw);
       sessionStorage.removeItem(SW_DRAFT_KEY);
       window.__sbApplyForm(data);
@@ -2667,7 +2774,11 @@ async function shareOrDownloadPdf(blob, filename){
   }
 
   if(!("serviceWorker" in navigator)){
-    window.addEventListener("load", function(){ restoreSwDraftIfNeeded(); });
+    window.addEventListener("load", function(){
+      if(typeof window.__sbRestoreFormSnapshotsIfNeeded==="function")
+        window.__sbRestoreFormSnapshotsIfNeeded();
+      else restoreSwDraftIfNeeded();
+    });
     return;
   }
 
@@ -2699,7 +2810,9 @@ async function shareOrDownloadPdf(blob, filename){
     document.addEventListener("visibilitychange", function(){
       if(document.visibilityState==="visible"){
         try{ reg.update(); }catch(e){}
-        restoreSwDraftIfNeeded();
+        if(typeof window.__sbRestoreFormSnapshotsIfNeeded==="function")
+          window.__sbRestoreFormSnapshotsIfNeeded();
+        else restoreSwDraftIfNeeded();
       }else{
         // Leaving the app: safe moment to apply a waiting update.
         activatePending();
@@ -2722,7 +2835,9 @@ async function shareOrDownloadPdf(blob, filename){
   }
 
   window.addEventListener("load", function(){
-    restoreSwDraftIfNeeded();
+    if(typeof window.__sbRestoreFormSnapshotsIfNeeded==="function")
+      window.__sbRestoreFormSnapshotsIfNeeded();
+    else restoreSwDraftIfNeeded();
     navigator.serviceWorker.register("./sw.js")
       .then(watchRegistration)
       .catch(function(err){ console.warn("Service Worker:", err); });
