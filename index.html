@@ -191,7 +191,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <header>
   <div class="header-top">
     <h1>Servicebericht</h1>
-    <div class="credit">Created by S. Pawlina v1.3</div>
+    <div class="credit">Created by S. Pawlina v1.4</div>
   </div>
   <div class="muted">Servicebericht auf dem iPad ausfüllen</div>
 </header>
@@ -1490,6 +1490,13 @@ try{
   }
 }catch(e){ console.warn("Bemerkungen:",e); }
 
+// Drop template embedded files (e.g. Content Credentials) so saving the PDF
+// does not create an extra sidecar/attachment file next to the report.
+try{
+  const names=pdf.catalog.lookup(PDFLib.PDFName.of("Names"));
+  if(names && names.delete) names.delete(PDFLib.PDFName.of("EmbeddedFiles"));
+}catch(e){}
+
 let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
 $("status").textContent="Fertig – PDF wird gespeichert…";
@@ -1736,15 +1743,17 @@ try{
     },null,2);
     return {filename, json};
   }
-  function reportFileFromItem(item, mime){
+  function reportFileFromItem(item){
     const {filename, json}=reportPayload(item);
-    return {filename, file:new File([json],filename,{type:mime||"application/json"})};
+    // Always application/json + .json name. text/plain made OneDrive/Chrome
+    // save a second file literally named "text".
+    return {filename, file:new File([json],filename,{type:"application/json"})};
   }
   function downloadReportFile(file, filename){
     const url=URL.createObjectURL(file);
     const a=document.createElement("a");
     a.href=url;
-    a.download=filename;
+    a.download=filename || "Servicebericht.json";
     a.rel="noopener";
     a.style.display="none";
     document.body.appendChild(a);
@@ -1754,13 +1763,12 @@ try{
     $("status").textContent="Datei zum Speichern geöffnet.";
   }
   async function exportReportFile(item){
-    const jsonFile=reportFileFromItem(item,"application/json");
-    const textFile=reportFileFromItem(item,"text/plain");
+    const jsonFile=reportFileFromItem(item);
     const onIpad=!window.showSaveFilePicker || isIosDevice();
 
     // iPad: only the share sheet can choose a Files folder. Call it once, immediately.
     if(onIpad && navigator.share){
-      await navigator.share({files:[textFile.file]});
+      await navigator.share({files:[jsonFile.file]});
       $("status").textContent="In Dateien sichern tippen, dann den Ordner wählen.";
       return;
     }
@@ -1986,34 +1994,45 @@ try{
 <script>
 
 let pdfHandoffBusy=false;
+function ensurePdfFileName(filename){
+  let name=String(filename||"Servicebericht.pdf").trim()||"Servicebericht.pdf";
+  name=name.replace(/[\\/:*?"<>|]+/g,"_");
+  if(!/\.pdf$/i.test(name)) name+=".pdf";
+  return name;
+}
 async function shareOrDownloadPdf(blob, filename){
   if(!blob) return false;
   if(pdfHandoffBusy) return "busy";
   pdfHandoffBusy=true;
   try{
-  const name=filename||"Servicebericht.pdf";
-  const file=new File([blob], name, {type:"application/pdf"});
+  const name=ensurePdfFileName(filename);
+  // Force PDF MIME so Chrome/OneDrive never fall back to a sidecar named "text".
+  const pdfBlob=(blob.type==="application/pdf")
+    ? blob
+    : new Blob([blob],{type:"application/pdf"});
+  const file=new File([pdfBlob], name, {type:"application/pdf"});
   // Share sheet only on iPhone/iPad. Chrome (desktop/Android) must save/download
   // directly — Web Share there opens "Teilen" with no immediate Speichern.
   const preferShare=/iPad|iPhone|iPod/.test(navigator.userAgent||"")
     || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
 
   if(!preferShare){
-    try{
-      if(window.showSaveFilePicker){
+    if(window.showSaveFilePicker){
+      try{
         const handle=await window.showSaveFilePicker({
           suggestedName:name,
           types:[{description:"PDF-Datei",accept:{"application/pdf":[".pdf"]}}]
         });
         const w=await handle.createWritable();
-        await w.write(blob);
+        await w.write(pdfBlob);
         await w.close();
         return "saved";
+      }catch(e){
+        if(e && e.name==="AbortError") return "aborted";
+        // Only download if the picker itself failed — never after a successful save.
       }
-    }catch(e){
-      if(e && e.name==="AbortError") return "aborted";
     }
-    const url=URL.createObjectURL(blob);
+    const url=URL.createObjectURL(pdfBlob);
     const a=document.createElement("a");
     a.href=url; a.download=name; a.rel="noopener"; a.style.display="none";
     document.body.appendChild(a); a.click(); a.remove();
@@ -2036,14 +2055,14 @@ async function shareOrDownloadPdf(blob, filename){
         types:[{description:"PDF-Datei",accept:{"application/pdf":[".pdf"]}}]
       });
       const w=await handle.createWritable();
-      await w.write(blob);
+      await w.write(pdfBlob);
       await w.close();
       return "saved";
     }
   }catch(e){
     if(e && e.name==="AbortError") return "aborted";
   }
-  const url=URL.createObjectURL(blob);
+  const url=URL.createObjectURL(pdfBlob);
   const a=document.createElement("a");
   a.href=url; a.download=name; a.rel="noopener"; a.style.display="none";
   document.body.appendChild(a); a.click(); a.remove();
