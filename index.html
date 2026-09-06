@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.17</div>
+      <div class="credit">Created by S. Pawlina v1.18</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -274,8 +274,8 @@ body.app-locked #appLock{display:flex}
 <div class="grid">
 <div><label>Straße</label><input id="street"></div><div><label>PLZ, Ort</label><input id="city"></div>
 <div><label>Ansprechpartner</label><input id="contact"></div><div><label>Einsatzdatum</label><input id="date" type="date"></div>
-<div><label>Blatt</label><input id="blatt" type="number" min="1" step="1" inputmode="numeric" placeholder="1"></div>
-<div><label>von Blätter</label><input id="blaetter" type="number" min="1" step="1" inputmode="numeric" placeholder="1"></div>
+<div><label>Blatt</label><input id="blatt" type="number" min="1" step="1" inputmode="numeric" placeholder=""></div>
+<div><label>von Blätter</label><input id="blaetter" type="number" min="1" step="1" inputmode="numeric" placeholder=""></div>
 </div></section>
 
 <section class="card"><h2>Maschine</h2>
@@ -2722,7 +2722,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.17";
+  const APP_VERSION="1.18";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
 
