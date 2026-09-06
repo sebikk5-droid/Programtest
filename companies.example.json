@@ -4,6 +4,8 @@
     "tel": "",
     "email": "service@beispiel.example",
     "adres": "Musterstraße 1, 12345 Musterstadt",
-    "notatki": "50km, 1,0"
+    "notatki": "50km, 1,0",
+    "km": 50,
+    "h": 1
   }
 ]

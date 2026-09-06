@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.13</div>
+      <div class="credit">Created by S. Pawlina v1.14</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -247,6 +247,17 @@ body.app-locked #appLock{display:flex}
 <div id="customerSearchResults" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:#fff;border:1px solid #bbb;border-radius:8px;max-height:240px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15);"></div>
 </div>
 <select id="company" autocomplete="off"><option value="">— Firma auswählen —</option></select>
+<div id="clientRouteBox" style="margin:8px 0 4px;padding:10px 12px;background:#f7f7f8;border:1px solid #e5e5ea;border-radius:12px">
+  <div class="muted" style="margin:0 0 8px">Fahrzeit & km aus der Kundenliste – hier ändern und speichern</div>
+  <div class="grid" style="margin:0">
+    <div><label for="clientKm">Kilometer</label><input id="clientKm" type="number" inputmode="decimal" step="0.1" min="0" placeholder="z. B. 115" disabled></div>
+    <div><label for="clientHours">Fahrzeit (Stunden)</label><input id="clientHours" type="number" inputmode="decimal" step="0.25" min="0" placeholder="z. B. 1,75" disabled></div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:stretch">
+    <button type="button" id="clientRouteSave" style="flex:1;min-width:160px;padding:12px;border-radius:12px;background:#e5e5ea;color:#111;font-size:15px;font-weight:700;border:0" disabled>In Kundenliste speichern</button>
+  </div>
+  <div class="muted" id="clientRouteHint" style="margin-top:8px">Zuerst Firma auswählen.</div>
+</div>
 <div id="companiesLocalBox" style="margin:10px 0 4px;padding:10px 12px;background:#f7f7f8;border:1px solid #e5e5ea;border-radius:12px">
   <div class="muted" id="companiesStatus" style="margin:0">Keine lokale Firmenliste – bitte Datei wählen</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:stretch">
@@ -811,25 +822,108 @@ function parseRoute(c){
   const note=noteKey!=null ? String(c[noteKey]||"") : "";
 
   let km=0, minutes=0;
+
+  // Prefer explicit fields when the user edited km/time in the app.
+  const kExplicit=keys.find(k=>/^(km|kilometer|kilometry)$/i.test(k));
+  if(kExplicit!=null && String(c[kExplicit]).trim()!=="" && isFinite(parseFloat(String(c[kExplicit]).replace(",","."))))
+    km=parseFloat(String(c[kExplicit]).replace(",","."));
+  const minExplicit=keys.find(k=>/^(minutes|minuten|fahrzeit_min)$/i.test(k));
+  if(minExplicit!=null && String(c[minExplicit]).trim()!=="" && isFinite(parseFloat(String(c[minExplicit]).replace(",","."))))
+    minutes=Math.round(parseFloat(String(c[minExplicit]).replace(",",".")));
+  if(!minutes){
+    const hk=keys.find(k=>/^(h|hours?|godziny?|czas|fahrzeit)$/i.test(k));
+    if(hk!=null && String(c[hk]).trim()!=="" && isFinite(parseFloat(String(c[hk]).replace(",","."))))
+      minutes=Math.round(parseFloat(String(c[hk]).replace(",","."))*60);
+  }
+
   let m=note.match(/(\d+(?:[.,]\d+)?)\s*km\b/i);
-  if(m) km=parseFloat(m[1].replace(",","."));
+  if(!km && m) km=parseFloat(m[1].replace(",","."));
 
   // The user's list contains both "1,75" and "1,75h".
   m=note.match(/(?:km[^,;]*[,;]\s*)?(\d+(?:[.,]\d+)?)\s*h\b/i);
   if(!m) m=note.match(/km[^,;]*[,;]\s*(\d+(?:[.,]\d+)?)(?!\s*(?:km|€))/i);
-  if(m) minutes=Math.round(parseFloat(m[1].replace(",","."))*60);
+  if(!minutes && m) minutes=Math.round(parseFloat(m[1].replace(",","."))*60);
 
-  // If the note has no km/time, support structured columns from the spreadsheet conversion.
-  if(!km){
-    const k=keys.find(k=>/^(km|kilometer|kilometry)$/i.test(k));
-    if(k && isFinite(parseFloat(c[k]))) km=parseFloat(c[k]);
-  }
-  if(!minutes){
-    const hk=keys.find(k=>/^(h|hours?|godziny?|czas)$/i.test(k));
-    if(hk && isFinite(parseFloat(String(c[hk]).replace(",","."))))
-      minutes=Math.round(parseFloat(String(c[hk]).replace(",","."))*60);
-  }
   return {km,minutes};
+}
+function formatRouteHours(minutes){
+  const h=Math.max(0,(Number(minutes)||0)/60);
+  return String(Math.round(h*100)/100);
+}
+function formatRouteNote(km, minutes){
+  const kmStr=String(Math.round((Number(km)||0)*10)/10).replace(".",",");
+  const hStr=formatRouteHours(minutes).replace(".",",");
+  return `${kmStr}km, ${hStr}`;
+}
+function syncClientRouteFields(){
+  const kmEl=$("clientKm");
+  const hEl=$("clientHours");
+  const saveBtn=$("clientRouteSave");
+  const hint=$("clientRouteHint");
+  const c=selectedCompany();
+  const enable=!!c;
+  if(kmEl) kmEl.disabled=!enable;
+  if(hEl) hEl.disabled=!enable;
+  if(saveBtn) saveBtn.disabled=!enable;
+  if(!enable){
+    if(kmEl) kmEl.value="";
+    if(hEl) hEl.value="";
+    if(hint) hint.textContent="Zuerst Firma auswählen.";
+    return;
+  }
+  const r=parseRoute(c);
+  if(kmEl) kmEl.value=r.km>0 ? String(Math.round(r.km*10)/10) : "";
+  if(hEl) hEl.value=r.minutes>0 ? formatRouteHours(r.minutes) : "";
+  if(hint) hint.textContent=`Aktuell in Liste: ${formatRouteNote(r.km,r.minutes)} · nur lokal auf diesem iPad`;
+}
+function saveClientRouteToList(){
+  const c=selectedCompany();
+  const idx=Number($("company")?.value);
+  if(!c || !Number.isInteger(idx) || idx<0 || !companies[idx]){
+    alert("Bitte zuerst eine Firma auswählen.");
+    return;
+  }
+  const kmRaw=String($("clientKm")?.value||"").trim().replace(",",".");
+  const hRaw=String($("clientHours")?.value||"").trim().replace(",",".");
+  const km=kmRaw==="" ? 0 : parseFloat(kmRaw);
+  const hours=hRaw==="" ? 0 : parseFloat(hRaw);
+  if(!Number.isFinite(km) || km<0){
+    alert("Bitte gültige Kilometer eingeben.");
+    return;
+  }
+  if(!Number.isFinite(hours) || hours<0){
+    alert("Bitte gültige Fahrzeit in Stunden eingeben.");
+    return;
+  }
+  const minutes=Math.round(hours*60);
+  const updated={...c};
+  updated.km=Math.round(km*10)/10;
+  updated.h=Math.round(hours*100)/100;
+  updated.minutes=minutes;
+  const noteKey=Object.keys(updated).find(k=>/notatki|notatka|note/i.test(k)) || "notatki";
+  updated[noteKey]=formatRouteNote(updated.km, minutes);
+  companies[idx]=updated;
+  try{
+    writeStoredCompanies(companies, "edit");
+  }catch(e){
+    alert("Konnte nicht speichern: "+(e?.message||e));
+    return;
+  }
+  syncClientRouteFields();
+  applyCustomerRouteDay1();
+  for(let d=2;d<=visibleDays;d++) applyCustomerRouteDay(d);
+  recalcTimes();
+  const hint=$("clientRouteHint");
+  if(hint) hint.textContent=`Gespeichert: ${updated[noteKey]} · lokal aktualisiert`;
+  setCompaniesStatus(`Lokale Liste: ${companies.length} Firmen · Route für ${c.firma||c.name||"Firma"} aktualisiert`);
+}
+function setupClientRouteEdit(){
+  const saveBtn=$("clientRouteSave");
+  if(saveBtn && saveBtn.dataset.bound!=="1"){
+    saveBtn.dataset.bound="1";
+    saveBtn.addEventListener("click", saveClientRouteToList);
+  }
+  syncClientRouteFields();
 }
 function addMinutesToTime(t,mins){
   if(!t || !Number.isFinite(mins)) return "";
@@ -1114,6 +1208,7 @@ function wireCompanyChangeHandler(){
     applyCustomerRouteDay1();
     for(let d=2;d<=visibleDays;d++) applyCustomerRouteDay(d);
     recalcTimes();
+    syncClientRouteFields();
   };
 }
 function applyCompanies(list, meta){
@@ -1142,6 +1237,7 @@ function applyCompanies(list, meta){
   }
   restorePdfReturnStateIfNeeded();
   if(typeof window.__sbRestoreSwDraftIfNeeded==="function") window.__sbRestoreSwDraftIfNeeded();
+  syncClientRouteFields();
 }
 function loadCompanies(){
   const stored=readStoredCompanies();
@@ -1157,6 +1253,7 @@ function loadCompanies(){
   setCompaniesStatus("Keine lokale Firmenliste – bitte Datei wählen");
   restorePdfReturnStateIfNeeded();
   if(typeof window.__sbRestoreSwDraftIfNeeded==="function") window.__sbRestoreSwDraftIfNeeded();
+  syncClientRouteFields();
 }
 async function importCompaniesFromFile(file){
   if(!file) return;
@@ -1201,6 +1298,7 @@ function setupCompaniesFileControls(){
   }
 }
 setupCompaniesFileControls();
+setupClientRouteEdit();
 loadCompanies();
 
 function set(form,n,v){try{form.getTextField(n).setText(v||"")}catch(e){}}
@@ -1744,7 +1842,8 @@ try{
   const HISTORY_KEY="servicebericht_history_v26";
   const SKIP_IDS={
     historySelect:1,travelTotal:1,workTotal:1,kmTotal:1,allTotal:1,
-    appLockPassword:1,companiesFile:1,historyFileInput:1
+    appLockPassword:1,companiesFile:1,historyFileInput:1,
+    clientKm:1,clientHours:1
   };
 
   function scrubSensitive(data){
@@ -2497,7 +2596,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.13";
+  const APP_VERSION="1.14";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
 
