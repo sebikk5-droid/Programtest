@@ -1,0 +1,13 @@
+{
+  "name": "Servicebericht (static PWA)",
+  "ports": [
+    { "name": "web", "port": 8000 }
+  ],
+  "terminals": [
+    {
+      "name": "web",
+      "command": "python3 -m http.server 8000 --bind 0.0.0.0",
+      "description": "Static HTTP server for the Servicebericht PWA. Open http://localhost:8000/index.html to use the app."
+    }
+  ]
+}
