@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.15</div>
+      <div class="credit">Created by S. Pawlina v1.16</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -1254,7 +1254,7 @@ function applyCompanies(list, meta){
   const count=companies.length;
   const when=meta?.savedAt ? new Date(meta.savedAt).toLocaleString("de-DE") : "";
   if(count){
-    setCompaniesStatus(`Lokale Liste: ${count} Firmen`+(when?` · ${when}`:"")+" · nicht auf GitHub");
+    setCompaniesStatus(`Lokale Liste: ${count} Firmen`+(when?` · ${when}`:""));
   }else{
     setCompaniesStatus("Keine lokale Firmenliste – bitte Datei wählen");
   }
@@ -2620,7 +2620,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.15";
+  const APP_VERSION="1.16";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
 
