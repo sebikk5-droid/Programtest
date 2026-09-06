@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.6</div>
+      <div class="credit">Created by S. Pawlina v1.7</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -249,12 +249,22 @@ body.app-locked #appLock{display:flex}
 <select id="company" autocomplete="off"><option value="">— Firma auswählen —</option></select>
 <div id="companiesLocalBox" style="margin:10px 0 4px;padding:10px 12px;background:#f7f7f8;border:1px solid #e5e5ea;border-radius:12px">
   <div class="muted" id="companiesStatus" style="margin:0">Keine lokale Firmenliste – bitte .json laden</div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-    <label for="companiesFile" style="flex:1;min-width:160px;display:inline-flex;align-items:center;justify-content:center;margin:0;padding:12px;border-radius:12px;background:#e5e5ea;color:#111;font-size:15px;font-weight:700;cursor:pointer">Firmenliste laden (.json)</label>
-    <input id="companiesFile" type="file" accept=".json,application/json,text/plain,*/*" style="display:none">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:stretch">
+    <button type="button" id="companiesLoadBtn" style="flex:1;min-width:160px;padding:12px;border-radius:12px;background:#e5e5ea;color:#111;font-size:15px;font-weight:700;border:0">Datei wählen (.json)</button>
+    <button type="button" id="companiesPasteBtn" style="flex:1;min-width:140px;padding:12px;border-radius:12px;background:#fff;border:1px solid #d1d1d6;color:#111;font-size:15px;font-weight:700">Aus Zwischenablage</button>
     <button type="button" id="companiesClear" style="flex:0 0 auto;min-width:110px;background:#fff;border:1px solid #d1d1d6;color:#111">Löschen</button>
   </div>
-  <div class="muted" style="margin-top:8px">Firmen + E-Mails bleiben nur auf diesem iPad. Nicht auf GitHub. Zum Aktualisieren neue .json wählen (Dateien/OneDrive).</div>
+  <!-- iOS: display:none blocks the file picker – keep input in layout but visually hidden -->
+  <input id="companiesFile" type="file" accept="application/json,text/plain,text/*,.json,.txt,*/*" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;opacity:0">
+  <div id="companiesPasteBox" style="display:none;margin-top:10px">
+    <label for="companiesPasteArea" style="margin-top:0">JSON hier einfügen (aus Dateien/Notizen kopieren)</label>
+    <textarea id="companiesPasteArea" rows="4" placeholder='[{"firma":"...","email":"...","adres":"..."}]' style="width:100%;font-size:14px;min-height:96px"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button type="button" class="go" id="companiesPasteApply" style="flex:1;min-width:140px">Liste übernehmen</button>
+      <button type="button" id="companiesPasteCancel" style="flex:0 0 auto;min-width:110px;background:#fff;border:1px solid #d1d1d6;color:#111">Abbrechen</button>
+    </div>
+  </div>
+  <div class="muted" style="margin-top:8px">Firmen + E-Mails bleiben nur auf diesem iPad. Datei aus „Dateien“ / OneDrive wählen. Wenn die Dateiauswahl nicht geht: JSON kopieren → „Aus Zwischenablage“.</div>
 </div>
 <div class="grid">
 <div><label>Straße</label><input id="street"></div><div><label>PLZ, Ort</label><input id="city"></div>
@@ -1027,7 +1037,11 @@ function writeStoredCompanies(list, source){
     savedAt:new Date().toISOString(),
     companies:list
   };
-  localStorage.setItem(COMPANIES_STORE_KEY, JSON.stringify(payload));
+  try{
+    localStorage.setItem(COMPANIES_STORE_KEY, JSON.stringify(payload));
+  }catch(e){
+    throw new Error("Speicher auf diesem Gerät ist voll oder blockiert.");
+  }
   return payload;
 }
 function clearStoredCompanies(){
@@ -1041,6 +1055,36 @@ function normalizeCompaniesPayload(data){
     if(Array.isArray(data.data)) return data.data;
   }
   throw new Error("JSON muss eine Firmen-Liste (Array) enthalten.");
+}
+function escapeHtmlOption(s){
+  return String(s||"").replace(/[&<>"']/g, ch=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[ch]));
+}
+function stripBom(text){
+  const t=String(text||"");
+  return t.charCodeAt(0)===0xFEFF ? t.slice(1) : t;
+}
+function readFileAsText(file){
+  if(file && typeof file.text==="function"){
+    return file.text().then(stripBom);
+  }
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(stripBom(reader.result||""));
+    reader.onerror=()=>reject(new Error("Datei konnte nicht gelesen werden."));
+    reader.readAsText(file);
+  });
+}
+function parseCompaniesText(text){
+  const cleaned=stripBom(text).trim();
+  if(!cleaned) throw new Error("Datei / Text ist leer.");
+  let data;
+  try{ data=JSON.parse(cleaned); }
+  catch(e){ throw new Error("Keine gültige JSON-Datei."); }
+  const list=normalizeCompaniesPayload(data);
+  if(!list.length) throw new Error("Die Datei enthält keine Firmen.");
+  return list;
 }
 function wireCompanyChangeHandler(){
   const sel=$("company");
@@ -1067,7 +1111,7 @@ function applyCompanies(list, meta){
   companies=Array.isArray(list)?list:[];
   const prevCompany=$("company")?.value||"";
   $("company").innerHTML='<option value="">— Firma auswählen —</option>'+
-    companies.map((c,i)=>`<option value="${i}">${c.firma||c.name||"Firma "+(i+1)}</option>`).join("");
+    companies.map((c,i)=>`<option value="${i}">${escapeHtmlOption(c.firma||c.name||"Firma "+(i+1))}</option>`).join("");
   if(prevCompany) $("company").value=prevCompany;
   wireCompanyChangeHandler();
   companiesReady=true;
@@ -1096,19 +1140,44 @@ function loadCompanies(){
 }
 async function importCompaniesFromFile(file){
   if(!file) return;
-  const text=await file.text();
-  let data;
-  try{ data=JSON.parse(text); }
-  catch(e){ throw new Error("Keine gültige JSON-Datei."); }
-  const list=normalizeCompaniesPayload(data);
-  if(!list.length) throw new Error("Die Datei enthält keine Firmen.");
+  const text=await readFileAsText(file);
+  const list=parseCompaniesText(text);
   const saved=writeStoredCompanies(list, "file");
   applyCompanies(list, saved);
-  setCompaniesStatus(`Aktualisiert aus Datei: ${list.length} Firmen · ${file.name} · lokal`);
+  setCompaniesStatus(`Aktualisiert aus Datei: ${list.length} Firmen · ${file.name||"Datei"} · lokal`);
+}
+function importCompaniesFromText(text, sourceLabel){
+  const list=parseCompaniesText(text);
+  const saved=writeStoredCompanies(list, "paste");
+  applyCompanies(list, saved);
+  setCompaniesStatus(`Aktualisiert aus ${sourceLabel||"Zwischenablage"}: ${list.length} Firmen · lokal`);
 }
 function setupCompaniesFileControls(){
   const input=$("companiesFile");
+  const loadBtn=$("companiesLoadBtn");
+  const pasteBtn=$("companiesPasteBtn");
+  const pasteBox=$("companiesPasteBox");
+  const pasteArea=$("companiesPasteArea");
+  const pasteApply=$("companiesPasteApply");
+  const pasteCancel=$("companiesPasteCancel");
   const clearBtn=$("companiesClear");
+
+  function showPaste(on){
+    if(pasteBox) pasteBox.style.display=on?"block":"none";
+    if(on && pasteArea){
+      pasteArea.value="";
+      setTimeout(()=>pasteArea.focus(),40);
+    }
+  }
+
+  if(loadBtn && loadBtn.dataset.bound!=="1"){
+    loadBtn.dataset.bound="1";
+    loadBtn.addEventListener("click", ()=>{
+      showPaste(false);
+      // iOS Safari: open picker from a real button click, not a hidden label.
+      if(input) input.click();
+    });
+  }
   if(input && input.dataset.bound!=="1"){
     input.dataset.bound="1";
     input.addEventListener("change", async()=>{
@@ -1118,9 +1187,42 @@ function setupCompaniesFileControls(){
       try{
         await importCompaniesFromFile(file);
       }catch(e){
+        alert("Firmenliste konnte nicht geladen werden: "+(e?.message||e)+"\nTipp: Datei in Notizen öffnen, alles kopieren, dann „Aus Zwischenablage“.");
+      }
+    });
+  }
+  if(pasteBtn && pasteBtn.dataset.bound!=="1"){
+    pasteBtn.dataset.bound="1";
+    pasteBtn.addEventListener("click", async()=>{
+      // Prefer Clipboard API when available (Safari 13.1+ / iPadOS).
+      try{
+        if(navigator.clipboard && typeof navigator.clipboard.readText==="function"){
+          const clip=await navigator.clipboard.readText();
+          if(clip && clip.trim()){
+            importCompaniesFromText(clip, "Zwischenablage");
+            return;
+          }
+        }
+      }catch(e){
+        // Permission denied / unavailable → fall back to paste box.
+      }
+      showPaste(true);
+    });
+  }
+  if(pasteApply && pasteApply.dataset.bound!=="1"){
+    pasteApply.dataset.bound="1";
+    pasteApply.addEventListener("click", ()=>{
+      try{
+        importCompaniesFromText(pasteArea?.value||"", "Einfügen");
+        showPaste(false);
+      }catch(e){
         alert("Firmenliste konnte nicht geladen werden: "+(e?.message||e));
       }
     });
+  }
+  if(pasteCancel && pasteCancel.dataset.bound!=="1"){
+    pasteCancel.dataset.bound="1";
+    pasteCancel.addEventListener("click", ()=>showPaste(false));
   }
   if(clearBtn && clearBtn.dataset.bound!=="1"){
     clearBtn.dataset.bound="1";
