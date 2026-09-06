@@ -191,7 +191,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <header>
   <div class="header-top">
     <h1>Servicebericht</h1>
-    <div class="credit">Created by S. Pawlina v1.2</div>
+    <div class="credit">Created by S. Pawlina v1.3</div>
   </div>
   <div class="muted">Servicebericht auf dem iPad ausfüllen</div>
 </header>
@@ -1492,20 +1492,21 @@ try{
 
 let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
-$("status").textContent="Fertig – PDF wird geteilt/gespeichert…";
+$("status").textContent="Fertig – PDF wird gespeichert…";
 try{
   const fname=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
   if(typeof shareOrDownloadPdf==="function"){
     const how=await shareOrDownloadPdf(lastPdfBlob, fname);
     if(how==="shared") $("status").textContent="PDF geteilt – in Dateien sichern.";
     else if(how==="saved") $("status").textContent="PDF wurde gespeichert.";
-    else if(how==="aborted") $("status").textContent="Speichern abgebrochen – bitte erneut teilen.";
+    else if(how==="aborted") $("status").textContent="Speichern abgebrochen – bitte erneut tippen.";
+    else if(how==="busy") $("status").textContent="PDF wird bereits gespeichert…";
     else $("status").textContent="PDF zum Speichern geöffnet.";
   } else {
     $("status").textContent="Fertig – das PDF ist vorbereitet.";
   }
 }catch(shareErr){
-  $("status").textContent="PDF erstellt – bitte über Speichern teilen.";
+  $("status").textContent="PDF erstellt – bitte erneut speichern.";
 }
 }catch(e){$("status").textContent="Fehler: "+e.message}
 };
@@ -1984,10 +1985,42 @@ try{
 
 <script>
 
+let pdfHandoffBusy=false;
 async function shareOrDownloadPdf(blob, filename){
   if(!blob) return false;
+  if(pdfHandoffBusy) return "busy";
+  pdfHandoffBusy=true;
+  try{
   const name=filename||"Servicebericht.pdf";
   const file=new File([blob], name, {type:"application/pdf"});
+  // Share sheet only on iPhone/iPad. Chrome (desktop/Android) must save/download
+  // directly — Web Share there opens "Teilen" with no immediate Speichern.
+  const preferShare=/iPad|iPhone|iPod/.test(navigator.userAgent||"")
+    || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+
+  if(!preferShare){
+    try{
+      if(window.showSaveFilePicker){
+        const handle=await window.showSaveFilePicker({
+          suggestedName:name,
+          types:[{description:"PDF-Datei",accept:{"application/pdf":[".pdf"]}}]
+        });
+        const w=await handle.createWritable();
+        await w.write(blob);
+        await w.close();
+        return "saved";
+      }
+    }catch(e){
+      if(e && e.name==="AbortError") return "aborted";
+    }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=name; a.rel="noopener"; a.style.display="none";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+    return "download";
+  }
+
   try{
     if(navigator.canShare && navigator.canShare({files:[file]}) && navigator.share){
       await navigator.share({files:[file], title:name});
@@ -2012,10 +2045,13 @@ async function shareOrDownloadPdf(blob, filename){
   }
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
-  a.href=url; a.download=name; a.style.display="none";
+  a.href=url; a.download=name; a.rel="noopener"; a.style.display="none";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),5000);
   return "download";
+  }finally{
+    pdfHandoffBusy=false;
+  }
 }
 
 </script>
@@ -2033,7 +2069,7 @@ async function shareOrDownloadPdf(blob, filename){
         const st=document.getElementById("status");
         const msg=String(st?.textContent||"");
         if(/^Fehler/i.test(msg)) return; // keep real generate error
-        if(/geteilt|gespeichert|zum Speichern|Speichern abgebrochen/i.test(msg)) return;
+        if(/geteilt|gespeichert|zum Speichern|Speichern abgebrochen|bereits gespeichert/i.test(msg)) return;
         if(lastPdfBlob===previousBlob){
           if(++tries>=150){
             if(st && !/^Fehler/i.test(String(st.textContent||"")))
@@ -2044,12 +2080,18 @@ async function shareOrDownloadPdf(blob, filename){
           return;
         }
         if(typeof lastPdfBlob!=="undefined" && lastPdfBlob){
+          // iPad: second handoff keeps share in a fresh turn if the async
+          // generate path lost the user gesture. Chrome already saved above.
+          const preferShare=/iPad|iPhone|iPod/.test(navigator.userAgent||"")
+            || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+          if(!preferShare) return;
           const filename=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
           const how=await shareOrDownloadPdf(lastPdfBlob, filename);
           if(st){
             if(how==="shared") st.textContent="PDF geteilt – in Dateien sichern.";
             else if(how==="saved") st.textContent="PDF wurde gespeichert.";
             else if(how==="aborted") st.textContent="Speichern abgebrochen.";
+            else if(how==="busy") return;
             else st.textContent="PDF zum Speichern geöffnet.";
           }
           return;
