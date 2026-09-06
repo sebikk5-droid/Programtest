@@ -191,7 +191,7 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <header>
   <div class="header-top">
     <h1>Servicebericht</h1>
-    <div class="credit">Created by S. Pawlina v1.1</div>
+    <div class="credit">Created by S. Pawlina v1.2</div>
   </div>
   <div class="muted">Servicebericht auf dem iPad ausfüllen</div>
 </header>
@@ -205,6 +205,8 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 <div class="grid">
 <div><label>Straße</label><input id="street"></div><div><label>PLZ, Ort</label><input id="city"></div>
 <div><label>Ansprechpartner</label><input id="contact"></div><div><label>Einsatzdatum</label><input id="date" type="date"></div>
+<div><label>Blatt</label><input id="blatt" type="number" min="1" step="1" inputmode="numeric" placeholder="1"></div>
+<div><label>von Blätter</label><input id="blaetter" type="number" min="1" step="1" inputmode="numeric" placeholder="1"></div>
 </div></section>
 
 <section class="card"><h2>Maschine</h2>
@@ -1337,6 +1339,12 @@ function pdfDateFromDay(dayNo){
 setFit(form,"Firma",firmaName(),8);
 setIf(form,"Straße",$("street").value);setIf(form,"PLZ, Ort",$("city").value);
 setIf(form,"Ansprechpartner",$("contact").value);
+{
+  const blatt=String($("blatt")?.value||"").trim();
+  const blaetter=String($("blaetter")?.value||"").trim();
+  if(blatt) setFit(form,"Text2",blatt,7);
+  if(blaetter) setFit(form,"Text3",blaetter,7);
+}
 setIf(form,"Hersteller",$("manufacturer").value);setIf(form,"Typ",$("type").value);setIf(form,"Maschinennummer",$("machineNo").value);
 setIf(form,"Steuerung",$("control").value);setIf(form,"NC Version",$("nc").value);setIf(form,"PLC Version",$("plc").value);
 setIf(form,"Störung",$("fault").value);setIf(form,"Betriebsstunden",$("hours").value);
@@ -1398,7 +1406,7 @@ if(km) setFit(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".","
 const pdfHasContent=!!(
   c || firmaName() || remarkLines.length || p.length || km || travel || work || bet || ein || art ||
   document.getElementById("maschine_ok")?.checked ||
-  ["street","city","contact","manufacturer","type","machineNo","control","nc","plc","fault","hours","tech","customersign"]
+  ["street","city","contact","blatt","blaetter","manufacturer","type","machineNo","control","nc","plc","fault","hours","tech","customersign"]
     .some(id=>String($(id)?.value||"").trim())
 );
 if(pdfHasContent){
