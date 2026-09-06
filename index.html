@@ -629,9 +629,10 @@ function updateDayRouteNetto(d){
   if(rt){
     // Netto = Listen-/Override-Fahrzeit — Pause ändert die Uhr, nicht das Netto.
     const routeMin=travelMinutesForDay(d,"out");
+    const pureOut=routeMin>0 ? routeMin : Math.max(0,parseInt(box.dataset.pureOutMin||"0",10)||0);
     const v=outOverride && outOverride.value!==""
       ? Math.max(0,parseInt(outOverride.value,10)||0)
-      : (routeMin>0 ? routeMin : Math.max(0,minutesBetween(a1?.value||"",a2?.value||"")-pauseMinutes(pa?.value||"0")));
+      : (pureOut>0 ? pureOut : Math.max(0,minutesBetween(a1?.value||"",a2?.value||"")-pauseMinutes(pa?.value||"0")));
     rt.value=fmtMin(v);
   }
   if(rr){
@@ -817,9 +818,19 @@ function applyAnfahrtPauseClock(d){
   const a1=box.querySelector(`[data-k="RZstart${outRow}"]`);
   const a2=box.querySelector(`[data-k="RZende${outRow}"]`);
   const pauseEl=box.querySelector(`[data-k="PauseRZ${outRow}"]`);
-  const outMin=anfahrtDuration(d);
-  if(!a1 || !a2 || !outMin) return;
+  if(!a1 || !a2) return;
   const pauseMin=pauseMinutes(pauseEl?.value||"0");
+  let outMin=anfahrtDuration(d);
+  if(outMin>0){
+    box.dataset.pureOutMin=String(outMin);
+  }else if(box.dataset.pureOutMin){
+    outMin=Math.max(0,parseInt(box.dataset.pureOutMin,10)||0);
+  }else if(a1.value && a2.value){
+    // First time without Listenzeit: remember pure drive = current span minus pause.
+    outMin=Math.max(0, minutesBetween(a1.value,a2.value)-pauseMin);
+    box.dataset.pureOutMin=String(outMin);
+  }
+  if(!outMin) return;
   const duration=outMin+pauseMin;
   if(a2.value){
     setQuarterTime(a1, addMinutesToTime(a2.value,-duration));
@@ -1019,8 +1030,6 @@ function clearPdfForm(form){
         if(typeof field.setText==="function") field.setText("");
         else if(typeof field.uncheck==="function") field.uncheck();
       }catch(e){}
-      const bottom=box.querySelector("[data-collapse-day], .btn-day-collapse");
-      if(bottom) bottom.textContent=collapsed ? "Ausklappen" : "Einklappen";
     });
     try{ form.updateFieldAppearances(); }catch(e){}
   }catch(e){}
@@ -1081,7 +1090,9 @@ function recalcTimes(){
       rt=Math.max(0,parseInt(outOverride.value,10)||0);
     }else{
       const routeMin=travelMinutesForDay(d,"out");
-      rt=routeMin>0 ? routeMin : Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseOut);
+      const pureOut=routeMin>0 ? routeMin : Math.max(0,parseInt(box?.dataset.pureOutMin||"0",10)||0);
+      // Pause widens clocks only — Reisezeit netto stays pure drive time.
+      rt=pureOut>0 ? pureOut : Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseOut);
     }
 
     let rr;
@@ -1089,6 +1100,7 @@ function recalcTimes(){
       rr=Math.max(0,parseInt(backOverride.value,10)||0);
     }else{
       const routeMin=travelMinutesForDay(d,"back");
+      // Same rule for Rückfahrt: pause changes arrival clock, not netto.
       rr=routeMin>0 ? routeMin : Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack);
     }
 
@@ -1151,9 +1163,15 @@ function bindTimeInputs(){
       const field=(name,n)=>box?.querySelector(`[data-k="${name}${n}"]`);
       const outMin=travelMinutesForDay(d,"out");
       const backMin=travelMinutesForDay(d,"back");
-      const isPauseKey=key===`PauseRZ${outRow}` || key===`PauseRZ${backRow}` || key===`PauseAZ${outRow}`;
-      // While typing pause minutes, only refresh totals — shift clocks on change.
-      if(ev && ev.type==="input" && isPauseKey){
+            const isPauseKey=key===`PauseRZ${outRow}` || key===`PauseRZ${backRow}` || key===`PauseAZ${outRow}`;
+      // Pause must not change Reisezeit netto. On PauseRZ: widen clocks first, then recalc.
+      if(isPauseKey){
+        if(key===`PauseRZ${outRow}`) applyAnfahrtPauseClock(d);
+        if(key===`PauseRZ${backRow}` && backMin){
+          const b1=field("RZstart",backRow), b2=field("RZende",backRow);
+          if(b1 && b2 && b1.value) setQuarterTime(b2, addMinutesToTime(b1.value, backMin+pauseMinutes(el.value||"0")));
+        }
+        // PauseAZ only affects Arbeitszeit netto via recalc; clocks unchanged.
         recalcTimes();
         if(typeof updateDayRouteNetto==="function") updateDayRouteNetto(d);
         return;
@@ -1580,7 +1598,7 @@ try{
       if(key==="__visibleDays" || /_collapsed$/.test(key) || SKIP_IDS[key]) return;
       const el=findField(key);
       if(!el) return;
-            if(el.type==="checkbox" || el.type==="radio") el.checked=!!data[key];
+      if(el.type==="checkbox" || el.type==="radio") el.checked=!!data[key];
       else if(el.tagName==="SELECT" && typeof setQuarterTime==="function") setQuarterTime(el, data[key] ?? "");
       else el.value=data[key] ?? "";
     });
