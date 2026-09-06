@@ -9,6 +9,9 @@
 <meta name="apple-touch-fullscreen" content="yes">
 <meta name="theme-color" content="#ffffff">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <title>Servicebericht</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f2f2f7;color:#111;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
@@ -411,18 +414,17 @@ function clearPdfReturnState(){
   try{ sessionStorage.removeItem(PDF_RETURN_KEY); }catch(e){}
 }
 function formLooksEmptyForRestore(){
-  // Do not treat persisted Auswahl checkboxes as "form filled" — they live in
-  // localStorage and would otherwise block PDF-return restore after Safari reload.
-  // Ignore remarks: they are also mirrored in localStorage (pdf_remarks) and would
-  // otherwise block PDF-return restore after Safari recreates the page.
-  const ids=["customerSearch","street","city","contact","manufacturer","type","machineNo","tech","fault","hours","parts"];
-  if(ids.some(id=>String($(id)?.value||"").trim())) return false;
+  // Ignore Auswahl (localStorage) and autofill-prone fields (tech/street/city/…).
+  // Only report-specific data blocks PDF-return restore.
   if($("company")?.value) return false;
   if(document.querySelector('[data-k^="RZstart"]')?.value) return false;
   if(document.querySelector('[data-k^="AZstart"]')?.value) return false;
   if(document.querySelector('[data-k^="PauseRZ"]')?.value) return false;
   if(document.querySelector('[data-k^="Kilometer"]')?.value) return false;
   if(document.querySelector("[data-daybox]:not([data-daybox='1'])")) return false;
+  if(String($("fault")?.value||"").trim()) return false;
+  if(String($("parts")?.value||"").trim()) return false;
+  if(String($("hours")?.value||"").trim()) return false;
   return true;
 }
 function restorePdfReturnStateIfNeeded(){
@@ -437,6 +439,7 @@ function restorePdfReturnStateIfNeeded(){
     // Full restore only on an empty recreated page.
     if(formLooksEmptyForRestore()){
       window.__sbApplyForm(data);
+      if(typeof clearPdfReturnState==="function") clearPdfReturnState();
       return true;
     }
 
@@ -647,7 +650,13 @@ document.getElementById("times").addEventListener("click",function(e){
   const box=document.querySelector(`[data-daybox="${d}"]`);
   if(!box) return;
   box.classList.toggle("day-collapsed");
-  btn.textContent=box.classList.contains("day-collapsed")?"Ausklappen":"Einklappen";
+  const collapsed=box.classList.contains("day-collapsed");
+  btn.textContent=collapsed?"Ausklappen":"Einklappen";
+  const header=box.querySelector('[data-day-action="collapse"]');
+  if(header){
+    header.textContent=collapsed ? "▼ Aufklappen" : "▲ Einklappen";
+    header.setAttribute("aria-expanded", collapsed?"false":"true");
+  }
 });
 
 // Day controls: collapse or remove a day that was added by mistake.
@@ -665,6 +674,8 @@ document.addEventListener("click",function(e){
     const collapsed=box.classList.toggle("day-collapsed");
     btn.textContent=collapsed ? "▼ Aufklappen" : "▲ Einklappen";
     btn.setAttribute("aria-expanded",collapsed?"false":"true");
+    const bottom=box.querySelector("[data-collapse-day], .btn-day-collapse");
+    if(bottom) bottom.textContent=box.classList.contains("day-collapsed") ? "Ausklappen" : "Einklappen";
     return;
   }
 
@@ -1008,6 +1019,8 @@ function clearPdfForm(form){
         if(typeof field.setText==="function") field.setText("");
         else if(typeof field.uncheck==="function") field.uncheck();
       }catch(e){}
+      const bottom=box.querySelector("[data-collapse-day], .btn-day-collapse");
+      if(bottom) bottom.textContent=collapsed ? "Ausklappen" : "Einklappen";
     });
     try{ form.updateFieldAppearances(); }catch(e){}
   }catch(e){}
@@ -1208,10 +1221,10 @@ function bindTimeInputs(){
         return;
       }
 
-      if(m && (m[1]==="RZstart" || m[1]==="RZende") && outMin){
+      if(m && (m[1]==="RZstart" || m[1]==="RZende") && (outMin || backMin)){
         const a1=field("RZstart",outRow),a2=field("RZende",outRow);
         const b1=field("RZstart",backRow),b2=field("RZende",backRow);
-        if(row===outRow && a1&&a2&&el.value){
+        if(row===outRow && a1&&a2&&el.value && outMin){
           const pause=field("PauseRZ",outRow);
           const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
           const duration=outMin+pauseMin;
@@ -1366,10 +1379,7 @@ for(let d=1;d<=dayBoxes.length;d++){
   travel+=rt+rr;work+=wt;pauses+=pauseOut+pauseWork+pauseBack;
 }
 if(km) setFit(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","),8);
-if(travel) setFit(form,"Reisezeit gesamt",fmtMinPdf(travel),8);
-if(work) setFit(form,"Arbeitszeit gesamt",fmtMinPdf(work),8);
-// Gesamtzeit = Reise + Arbeit + alle Pausen
-if(travel||work||pauses) setFit(form,"Gesamtzeit",fmtMinPdf(travel+work+pauses),8);
+// Leer.pdf has no AcroForm fields for Reisezeit/Arbeitszeit/Gesamtzeit gesamt (only Kilometer gesamt).
 
 const pdfHasContent=!!(
   c || firmaName() || remarkLines.length || p.length || km || travel || work || bet || ein || art ||
@@ -1460,7 +1470,21 @@ try{
 
 let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
-$("status").textContent="Fertig – das PDF ist vorbereitet.";
+$("status").textContent="Fertig – PDF wird geteilt/gespeichert…";
+try{
+  const fname=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
+  if(typeof shareOrDownloadPdf==="function"){
+    const how=await shareOrDownloadPdf(lastPdfBlob, fname);
+    if(how==="shared") $("status").textContent="PDF geteilt – in Dateien sichern.";
+    else if(how==="saved") $("status").textContent="PDF wurde gespeichert.";
+    else if(how==="aborted") $("status").textContent="Speichern abgebrochen – bitte erneut teilen.";
+    else $("status").textContent="PDF zum Speichern geöffnet.";
+  } else {
+    $("status").textContent="Fertig – das PDF ist vorbereitet.";
+  }
+}catch(shareErr){
+  $("status").textContent="PDF erstellt – bitte über Speichern teilen.";
+}
 }catch(e){$("status").textContent="Fehler: "+e.message}
 };
 
@@ -1556,7 +1580,8 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
       if(key==="__visibleDays" || /_collapsed$/.test(key) || SKIP_IDS[key]) return;
       const el=findField(key);
       if(!el) return;
-      if(el.type==="checkbox" || el.type==="radio") el.checked=!!data[key];
+            if(el.type==="checkbox" || el.type==="radio") el.checked=!!data[key];
+      else if(el.tagName==="SELECT" && typeof setQuarterTime==="function") setQuarterTime(el, data[key] ?? "");
       else el.value=data[key] ?? "";
     });
 
@@ -1574,6 +1599,8 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
         btn.textContent=collapsed ? "▼ Aufklappen" : "▲ Einklappen";
         btn.setAttribute("aria-expanded",collapsed?"false":"true");
       }
+      const bottom=box.querySelector("[data-collapse-day], .btn-day-collapse");
+      if(bottom) bottom.textContent=collapsed ? "Ausklappen" : "Einklappen";
     });
 
     bindTimeInputs();
@@ -1615,6 +1642,16 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
     const name=(company?.selectedOptions?.[0]?.textContent||"").trim();
     return name && !name.startsWith("—") ? name : "Servicebericht";
   }
+  
+  function whenCompaniesReady(fn){
+    if(companiesReady){ fn(); return; }
+    let n=0;
+    const timer=setInterval(()=>{
+      n++;
+      if(companiesReady || n>100){ clearInterval(timer); fn(); }
+    }, 50);
+  }
+
   function openSelected(){
     const sel=document.getElementById("historySelect");
     if(!sel || sel.value===""){
@@ -1628,7 +1665,7 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
       alert("Dieser Bericht konnte nicht geladen werden.");
       return;
     }
-    applyForm(data);
+    whenCompaniesReady(()=>{ applyForm(data); });
     refresh(sel.value);
     $("status").textContent="Bericht wurde geöffnet.";
   }
@@ -1651,7 +1688,7 @@ $("status").textContent="Fertig – das PDF ist vorbereitet.";
     saveHistory(list);
     refresh(imported ? "0" : "");
     if(imported){
-      applyForm(historyItemData(imported));
+      whenCompaniesReady(()=>{ applyForm(historyItemData(imported)); });
       $("status").textContent="Bericht wurde geöffnet.";
     }else{
       $("status").textContent="Historie wurde importiert.";
@@ -1974,6 +2011,7 @@ async function shareOrDownloadPdf(blob, filename){
         const st=document.getElementById("status");
         const msg=String(st?.textContent||"");
         if(/^Fehler/i.test(msg)) return; // keep real generate error
+        if(/geteilt|gespeichert|zum Speichern|Speichern abgebrochen/i.test(msg)) return;
         if(lastPdfBlob===previousBlob){
           if(++tries>=150){
             if(st && !/^Fehler/i.test(String(st.textContent||"")))
@@ -2005,14 +2043,13 @@ async function shareOrDownloadPdf(blob, filename){
 })();
 </script>
 
-</body>
-</html>
 <script>
 if("serviceWorker" in navigator){
   window.addEventListener("load",function(){
-    navigator.serviceWorker.register("./sw.js").catch(function(err){
-      console.warn("Service Worker:", err);
-    });
+    navigator.serviceWorker.register("./sw.js").catch(function(err){ console.warn("Service Worker:", err); });
   });
 }
 </script>
+
+</body>
+</html>

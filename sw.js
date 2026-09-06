@@ -1,4 +1,4 @@
-const CACHE_NAME = "servicebericht-v27-6-70";
+const CACHE_NAME = "servicebericht-v27-6-80";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,9 @@ const APP_SHELL = [
   "./companies.json",
   "./Leer.pdf",
   "./vendor/pdf-lib.min.js",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
+  "./icons/icon-180.png",
   "./sw.js"
 ];
 
