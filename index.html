@@ -943,9 +943,8 @@ function applyCustomerRouteDay(d){
 
   const info=box?.querySelector(`#routeInfo${d}`);
   if(info){
-    const pauseOutShown=pauseOut ? pauseMinutes(pauseOut.value||"0") : 0;
-    const pauseShown=pauseR ? pauseMinutes(pauseR.value||"0") : 0;
-    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke. Anfahrt: ${fmtMin(r.minutes)} + ${pauseOutShown} Min Pause. Rückfahrt: ${fmtMin(r.minutes)} + ${pauseShown} Min Pause.`;
+    // Only list km/Fahrzeit — Pause fields are the live source of truth.
+    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} Reisezeit eine Strecke (ohne Pause).`;
   }
   recalcTimes();
 }
