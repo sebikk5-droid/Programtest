@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.12</div>
+      <div class="credit">Created by S. Pawlina v1.13</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -297,7 +297,7 @@ body.app-locked #appLock{display:flex}
       <button type="button" id="historyDelete" class="history-file-btn">Löschen</button>
     </div>
   </div>
-  <div class="muted">Liste wählen lädt den Bericht in der App. Öffnen wählt eine Datei in „Dateien“ (Ordner antippen). Speichern: App + Teilen → In Dateien sichern.</div>
+  <div class="muted">Liste: Datum – Kunde (neuester Eintrag oben). Öffnen wählt eine Datei in „Dateien“. Speichern: App + Teilen → In Dateien sichern.</div>
 </section>
 <div id="times"></div>
 <div class="grid" style="margin-top:12px">
@@ -1754,6 +1754,22 @@ try{
     delete data.historyFileInput;
     return data;
   }
+  function saveHistory(list){
+    try{
+      const sorted=sortHistoryNewestFirst(list);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(sorted.slice(0,100)));
+    }catch(e){
+      throw new Error("Speicher auf diesem Gerät ist voll oder blockiert.");
+    }
+  }
+  function sortHistoryNewestFirst(list){
+    if(!Array.isArray(list)) return [];
+    return list.slice().sort((a,b)=>{
+      const ta=Date.parse(a?.savedAt||"")||0;
+      const tb=Date.parse(b?.savedAt||"")||0;
+      return tb-ta;
+    });
+  }
   function loadHistory(){
     try {
       const list=JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]");
@@ -1765,19 +1781,13 @@ try{
           dirty=true;
         }
       });
-      if(dirty){
-        try{ saveHistory(list); }catch(e){}
+      const sorted=sortHistoryNewestFirst(list);
+      if(dirty || sorted.some((item,i)=>item!==list[i])){
+        try{ saveHistory(sorted); }catch(e){}
       }
-      return list;
+      return sorted;
     }
     catch(e){ return []; }
-  }
-  function saveHistory(list){
-    try{
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0,100)));
-    }catch(e){
-      throw new Error("Speicher auf diesem Gerät ist voll oder blockiert.");
-    }
   }
   function fieldKey(el){
     if(!el) return "";
@@ -1916,17 +1926,45 @@ try{
     list.forEach((item,i)=>{
       const opt=document.createElement("option");
       opt.value=String(i);
-      opt.textContent=(item.name||"Bericht")+" – "+new Date(item.savedAt).toLocaleString("de-DE");
+      opt.textContent=historyListLabel(item);
       sel.appendChild(opt);
     });
     if(prev!=="" && list[Number(prev)]) sel.value=prev;
   }
-  function defaultName(){
+  function clientNameForHistory(){
     const typed=(document.getElementById("customerSearch")?.value||"").trim();
     if(typed && !typed.startsWith("—")) return typed;
     const company=document.getElementById("company");
     const name=(company?.selectedOptions?.[0]?.textContent||"").trim();
-    return name && !name.startsWith("—") ? name : "Servicebericht";
+    if(name && !name.startsWith("—")) return name;
+    const fromData=(typeof window.__sbCollectForm==="function"
+      ? String(window.__sbCollectForm()?.__firmaName||"").trim()
+      : "");
+    return fromData || "Kunde";
+  }
+  function formatHistoryDate(iso){
+    const d=iso ? new Date(iso) : new Date();
+    if(Number.isNaN(d.getTime())){
+      const now=new Date();
+      return `${String(now.getDate()).padStart(2,"0")}.${String(now.getMonth()+1).padStart(2,"0")}.${now.getFullYear()}`;
+    }
+    return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
+  }
+  function historyEntryName(savedAt, client){
+    const date=formatHistoryDate(savedAt);
+    const kunde=String(client||"Kunde").trim() || "Kunde";
+    return `${date} – ${kunde}`;
+  }
+  function historyListLabel(item){
+    if(!item) return "Bericht";
+    // Prefer stored "Datum – Kunde"; rebuild for older entries.
+    const name=String(item.name||"").trim();
+    if(/^\d{2}\.\d{2}\.\d{4}\s*[–-]/.test(name)) return name;
+    const client=name && name!=="Servicebericht" && name!=="Bericht" ? name : "Kunde";
+    return historyEntryName(item.savedAt, client);
+  }
+  function defaultName(){
+    return historyEntryName(new Date().toISOString(), clientNameForHistory());
   }
   
   function whenCompaniesReady(fn){
@@ -2461,7 +2499,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.12";
+  const APP_VERSION="1.13";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
 
