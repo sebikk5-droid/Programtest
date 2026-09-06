@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.8</div>
+      <div class="credit">Created by S. Pawlina v1.9</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -2373,11 +2373,62 @@ async function shareOrDownloadPdf(blob, filename){
 </script>
 
 <script>
-if("serviceWorker" in navigator){
-  window.addEventListener("load",function(){
-    navigator.serviceWorker.register("./sw.js").catch(function(err){ console.warn("Service Worker:", err); });
+(function(){
+  // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
+  const APP_VERSION="1.9";
+  const VERSION_KEY="servicebericht_app_version_v1";
+
+  try{
+    const prev=localStorage.getItem(VERSION_KEY);
+    if(prev && prev!==APP_VERSION){
+      // Drop old Cache Storage entries so a stuck SW cannot keep an old shell.
+      if("caches" in window){
+        caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).catch(function(){});
+      }
+    }
+    localStorage.setItem(VERSION_KEY, APP_VERSION);
+  }catch(e){}
+
+  if(!("serviceWorker" in navigator)) return;
+
+  let refreshing=false;
+  navigator.serviceWorker.addEventListener("controllerchange", function(){
+    if(refreshing) return;
+    refreshing=true;
+    location.reload();
   });
-}
+
+  function watchRegistration(reg){
+    if(!reg) return;
+    // Ask for a fresh SW ASAP (do not wait up to 24h).
+    try{ reg.update(); }catch(e){}
+    // While the app stays open on the iPad, keep checking.
+    setInterval(function(){
+      try{ reg.update(); }catch(e){}
+    }, 30000);
+    document.addEventListener("visibilitychange", function(){
+      if(document.visibilityState==="visible"){
+        try{ reg.update(); }catch(e){}
+      }
+    });
+    reg.addEventListener("updatefound", function(){
+      const sw=reg.installing;
+      if(!sw) return;
+      sw.addEventListener("statechange", function(){
+        if(sw.state==="installed" && navigator.serviceWorker.controller){
+          // Activate immediately so controllerchange → reload.
+          try{ sw.postMessage({type:"SKIP_WAITING"}); }catch(e){}
+        }
+      });
+    });
+  }
+
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("./sw.js")
+      .then(watchRegistration)
+      .catch(function(err){ console.warn("Service Worker:", err); });
+  });
+})();
 </script>
 
 </body>
