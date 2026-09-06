@@ -234,7 +234,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.10</div>
+      <div class="credit">Created by S. Pawlina v1.11</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -292,7 +292,7 @@ body.app-locked #appLock{display:flex}
     </div>
     <div class="field" style="display:flex;align-items:end;gap:8px;flex-wrap:wrap;position:relative">
       <button type="button" id="historySave" class="history-file-btn">Speichern</button>
-      <label class="history-file-btn" for="historyFileInput">Öffnen</label>
+      <button type="button" id="historyOpenBtn" class="history-file-btn">Öffnen</button>
       <input id="historyFileInput" type="file" accept=".json,.txt,text/plain,application/json,*/*">
       <button type="button" id="historyDelete" class="history-file-btn">Löschen</button>
     </div>
@@ -503,12 +503,16 @@ function restorePdfReturnStateIfNeeded(){
     // If the form was restored earlier but the Firma <select> was rebuilt
     // afterwards, re-apply only the company selection from the snapshot.
     const companyEl=$("company");
-    if(companyEl && !companyEl.value && data.company!=null && String(data.company)!==""){
-      companyEl.value=String(data.company);
+    if(companyEl && !companyEl.value){
+      const byName=String(data.__firmaName || data.customerSearch || "").trim();
+      const ok=byName ? selectCompanyByName(byName) : false;
+      if(!ok && data.company!=null && String(data.company)!==""){
+        companyEl.value=String(data.company);
+      }
       const search=$("customerSearch");
-      if(search && companyEl.selectedOptions[0])
+      if(companyEl.value && search && companyEl.selectedOptions[0])
         search.value=companyEl.selectedOptions[0].textContent.trim();
-      return true;
+      if(companyEl.value) return true;
     }
     return false;
   }catch(e){ return false; }
@@ -685,11 +689,20 @@ function updateDayRouteNetto(d){
   const backOverride=box.querySelector('[data-route-override="back"]');
   if(rt){
     // Netto = Listen-/Override-Fahrzeit — Pause ändert die Uhr, nicht das Netto.
+    // Without Listenzeit: keep pureOutMin in sync with the live clock span.
     const routeMin=travelMinutesForDay(d,"out");
-    const pureOut=routeMin>0 ? routeMin : Math.max(0,parseInt(box.dataset.pureOutMin||"0",10)||0);
-    const v=outOverride && outOverride.value!==""
-      ? Math.max(0,parseInt(outOverride.value,10)||0)
-      : (pureOut>0 ? pureOut : Math.max(0,minutesBetween(a1?.value||"",a2?.value||"")-pauseMinutes(pa?.value||"0")));
+    let v;
+    if(outOverride && outOverride.value!==""){
+      v=Math.max(0,parseInt(outOverride.value,10)||0);
+    }else if(routeMin>0){
+      v=routeMin;
+      box.dataset.pureOutMin=String(v);
+    }else if(a1?.value && a2?.value){
+      v=Math.max(0,minutesBetween(a1.value,a2.value)-pauseMinutes(pa?.value||"0"));
+      box.dataset.pureOutMin=String(v);
+    }else{
+      v=Math.max(0,parseInt(box.dataset.pureOutMin||"0",10)||0);
+    }
     rt.value=fmtMin(v);
   }
   if(rr){
@@ -912,8 +925,21 @@ function firmaName(){
   const c=selectedCompany();
   return c?String(c.firma||c.name||"").trim():"";
 }
+function selectCompanyByName(name){
+  const sel=$("company");
+  const want=String(name||"").trim().toLocaleLowerCase("de-DE");
+  if(!sel || !want) return false;
+  const opts=[...sel.options].filter(o=>o.value!=="");
+  let hit=opts.find(o=>o.textContent.trim().toLocaleLowerCase("de-DE")===want);
+  if(!hit) hit=opts.find(o=>o.textContent.trim().toLocaleLowerCase("de-DE").includes(want));
+  if(!hit) return false;
+  sel.value=hit.value;
+  return true;
+}
 function pdfFileName(){
-  return "Servicebericht.pdf";
+  const raw=firmaName() || "Servicebericht";
+  const safe=raw.replace(/[\\/:*?"<>|]+/g,"_").replace(/\s+/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,"").slice(0,60) || "Servicebericht";
+  return `${safe}_${localIsoDate()}.pdf`;
 }
 function customerRoute(){
   if(!Array.isArray(companies)) return {km:0,minutes:0};
@@ -1100,10 +1126,19 @@ function wireCompanyChangeHandler(){
 }
 function applyCompanies(list, meta){
   companies=Array.isArray(list)?list:[];
-  const prevCompany=$("company")?.value||"";
+  const prevIdx=$("company")?.value||"";
+  const prevName=(()=>{
+    const typed=String($("customerSearch")?.value||"").trim();
+    if(typed && !typed.startsWith("—")) return typed;
+    const sel=$("company");
+    if(sel && prevIdx!=="" && sel.selectedOptions[0])
+      return sel.selectedOptions[0].textContent.trim();
+    return "";
+  })();
   $("company").innerHTML='<option value="">— Firma auswählen —</option>'+
     companies.map((c,i)=>`<option value="${i}">${escapeHtmlOption(c.firma||c.name||"Firma "+(i+1))}</option>`).join("");
-  if(prevCompany) $("company").value=prevCompany;
+  if(prevName) selectCompanyByName(prevName);
+  else if(prevIdx) $("company").value=prevIdx;
   wireCompanyChangeHandler();
   companiesReady=true;
   const count=companies.length;
@@ -1278,9 +1313,17 @@ function recalcTimes(){
       rt=Math.max(0,parseInt(outOverride.value,10)||0);
     }else{
       const routeMin=travelMinutesForDay(d,"out");
-      const pureOut=routeMin>0 ? routeMin : Math.max(0,parseInt(box?.dataset.pureOutMin||"0",10)||0);
-      // Pause widens clocks only — Reisezeit netto stays pure drive time.
-      rt=pureOut>0 ? pureOut : Math.max(0,minutesBetween(q(`RZstart${a}`).value,q(`RZende${a}`).value)-pauseOut);
+      const a1=q(`RZstart${a}`).value, a2=q(`RZende${a}`).value;
+      if(routeMin>0){
+        rt=routeMin;
+        if(box) box.dataset.pureOutMin=String(rt);
+      }else if(a1 && a2){
+        // Live clocks beat a stale pureOutMin after manual edits.
+        rt=Math.max(0,minutesBetween(a1,a2)-pauseOut);
+        if(box) box.dataset.pureOutMin=String(rt);
+      }else{
+        rt=Math.max(0,parseInt(box?.dataset.pureOutMin||"0",10)||0);
+      }
     }
 
     let rr;
@@ -1427,16 +1470,21 @@ function bindTimeInputs(){
         return;
       }
 
-      if(m && (m[1]==="RZstart" || m[1]==="RZende") && (outMin || backMin)){
+      if(m && (m[1]==="RZstart" || m[1]==="RZende") && (outMin || backMin || row===outRow || row===backRow)){
         const a1=field("RZstart",outRow),a2=field("RZende",outRow);
         const b1=field("RZstart",backRow),b2=field("RZende",backRow);
-        if(row===outRow && a1&&a2&&el.value && outMin){
+        if(row===outRow && a1&&a2&&el.value){
           const pause=field("PauseRZ",outRow);
           const pauseMin=pause ? pauseMinutes(pause.value||"0") : 0;
-          const duration=outMin+pauseMin;
-          // Ankunft ändern -> Abfahrt inkl. Pause. Abfahrt ändern -> Ankunft.
-          if(el===a1) setQuarterTime(a2, addMinutesToTime(el.value,duration));
-          else setQuarterTime(a1, addMinutesToTime(el.value,-duration));
+          if(outMin){
+            const duration=outMin+pauseMin;
+            // Ankunft ändern -> Abfahrt inkl. Pause. Abfahrt ändern -> Ankunft.
+            if(el===a1) setQuarterTime(a2, addMinutesToTime(el.value,duration));
+            else setQuarterTime(a1, addMinutesToTime(el.value,-duration));
+          }else if(a1.value && a2.value){
+            // No Listenzeit: manual clocks define the new pure drive time.
+            box.dataset.pureOutMin=String(Math.max(0,minutesBetween(a1.value,a2.value)-pauseMin));
+          }
           const az=field("AZstart",outRow);
           if(az&&a2.value&&az.dataset.manual!=="1") setQuarterTime(az, a2.value);
         }
@@ -1781,6 +1829,11 @@ try{
       const d=box.getAttribute("data-daybox");
       data[`day${d}_collapsed`]=box.classList.contains("day-collapsed");
     });
+    const typed=(document.getElementById("customerSearch")?.value||"").trim();
+    const company=document.getElementById("company");
+    const fromList=(company?.selectedOptions?.[0]?.textContent||"").trim();
+    data.__firmaName=(typed && !typed.startsWith("—")) ? typed
+      : (fromList && !fromList.startsWith("—") ? fromList : "");
     return scrubSensitive(data);
   }
   function findField(key){
@@ -1824,7 +1877,7 @@ try{
     if(addBtn) addBtn.style.display=visibleDays>=6?"none":"";
 
     Object.keys(data).forEach(key=>{
-      if(key==="__visibleDays" || /_collapsed$/.test(key) || SKIP_IDS[key]) return;
+      if(key==="__visibleDays" || key==="__firmaName" || /_collapsed$/.test(key) || SKIP_IDS[key]) return;
       const el=findField(key);
       if(!el) return;
       if(el.type==="checkbox" || el.type==="radio") el.checked=!!data[key];
@@ -1834,8 +1887,13 @@ try{
 
     const company=document.getElementById("company");
     const search=document.getElementById("customerSearch");
-    if(company && search && company.value!=="" && company.selectedOptions[0])
+    const byName=String(data.__firmaName || data.customerSearch || "").trim();
+    if(byName && typeof selectCompanyByName==="function" && selectCompanyByName(byName)){
+      if(search && company?.selectedOptions?.[0])
+        search.value=company.selectedOptions[0].textContent.trim();
+    }else if(company && search && company.value!=="" && company.selectedOptions[0]){
       search.value=company.selectedOptions[0].textContent.trim();
+    }
 
     document.querySelectorAll("[data-daybox]").forEach(box=>{
       const d=box.getAttribute("data-daybox");
@@ -1985,6 +2043,10 @@ try{
 
     // iPad: only the share sheet can choose a Files folder. Call it once, immediately.
     if(onIpad && navigator.share){
+      if(navigator.canShare && !navigator.canShare({files:[jsonFile.file]})){
+        downloadReportFile(jsonFile.file, jsonFile.filename);
+        return;
+      }
       await navigator.share({files:[jsonFile.file]});
       $("status").textContent="In Dateien sichern tippen, dann den Ordner wählen.";
       return;
@@ -2009,8 +2071,13 @@ try{
     refresh("");
     const save=document.getElementById("historySave");
     const fileInput=document.getElementById("historyFileInput");
+    const openBtn=document.getElementById("historyOpenBtn");
     const del=document.getElementById("historyDelete");
     const sel=document.getElementById("historySelect");
+
+    openBtn?.addEventListener("click", ()=>{
+      if(fileInput) fileInput.click();
+    });
 
     save?.addEventListener("click",async()=>{
       const item={
@@ -2413,7 +2480,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.10";
+  const APP_VERSION="1.11";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
 
