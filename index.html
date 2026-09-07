@@ -251,7 +251,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.22</div>
+      <div class="credit">Created by S. Pawlina v1.23</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -383,6 +383,7 @@ body.app-locked #appLock{display:flex}
 </div>
 </section>
 <div id="status"></div>
+<button type="button" class="go" id="savePdf" hidden style="width:100%;margin:8px 0 4px;display:none">PDF speichern</button>
 </main>
 <div class="bottom"><button class="clear" onclick="try{sessionStorage.removeItem('servicebericht_pdf_return_v1');localStorage.removeItem('pdf_remarks');Object.keys(localStorage).filter(k=>k.startsWith('choice_')||k.startsWith('pdf_')).forEach(k=>localStorage.removeItem(k));}catch(e){};location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button></div>
 <script src="vendor/pdf-lib.min.js"></script>
@@ -504,20 +505,30 @@ function clearPdfReturnState(){
 function formLooksEmptyForRestore(){
   // Ignore Auswahl (localStorage) and autofill-prone fields (tech/street/city/…).
   // Report-specific data blocks snapshot restore.
+  // Do NOT treat pdf_remarks (localStorage) as live form data — that blocked
+  // PDF-return / SW-draft restore after every report with Bemerkungen.
   if($("company")?.value) return false;
   if(String($("customerSearch")?.value||"").trim()) return false;
   if(document.querySelector('[data-k^="RZstart"]')?.value) return false;
   if(document.querySelector('[data-k^="RZende"]')?.value) return false;
   if(document.querySelector('[data-k^="AZstart"]')?.value) return false;
   if(document.querySelector('[data-k^="AZende"]')?.value) return false;
-  if(document.querySelector('[data-k^="PauseRZ"]')?.value) return false;
-  if(document.querySelector('[data-k^="PauseAZ"]')?.value) return false;
-  if(document.querySelector('[data-k^="Kilometer"]')?.value) return false;
+  // Ignore empty/"0" and the default Rückfahrt-Pause (45).
+  const pauseUser=[...document.querySelectorAll('[data-k^="PauseRZ"],[data-k^="PauseAZ"]')].some(el=>{
+    const v=String(el.value||"").trim();
+    if(!v || v==="0") return false;
+    const k=el.getAttribute("data-k")||"";
+    const n=parseInt(k.replace(/^Pause[RA]Z/,""),10);
+    if(/^PauseRZ\d+$/.test(k) && n%2===0 && v==="45") return false;
+    return true;
+  });
+  if(pauseUser) return false;
+  if([...document.querySelectorAll('[data-k^="Kilometer"]')].some(el=>String(el.value||"").trim()!=="")) return false;
   if(document.querySelector("[data-daybox]:not([data-daybox='1'])")) return false;
   if(String($("fault")?.value||"").trim()) return false;
   if(String($("parts")?.value||"").trim()) return false;
   if(String($("hours")?.value||"").trim()) return false;
-  if(String($("remarks")?.value||"").trim()) return false;
+  // remarks intentionally omitted — see pdf_remarks note above
   if(String($("manufacturer")?.value||"").trim()) return false;
   if(String($("type")?.value||"").trim()) return false;
   if(String($("machineNo")?.value||"").trim()) return false;
@@ -527,6 +538,7 @@ function formLooksEmptyForRestore(){
 function clearCustomerRouteFields(){
   document.querySelectorAll("[data-daybox]").forEach(box=>{
     try{ delete box.dataset.pureOutMin; }catch(e){}
+    try{ delete box.dataset.pureBackMin; }catch(e){}
     box.querySelectorAll('[data-k^="Kilometer"]').forEach(el=>{ el.value=""; });
     box.querySelectorAll("[data-route-override]").forEach(el=>{
       el.value="";
@@ -743,6 +755,7 @@ $("times").innerHTML=dayTemplate(1)+`
 `;
 initQuarterTimeSelects($("times"));
 document.querySelector('[data-daybox="1"]')?.setAttribute("data-day-active","1");
+syncDayDatesFromMainDate();
 $("addDay").onclick=()=>{
   if(visibleDays>=6)return;
   const d=document.querySelectorAll('[data-daybox]').length+1;
@@ -1047,17 +1060,8 @@ function syncAllPauseClocks(){
   document.querySelectorAll("[data-daybox]").forEach(box=>{
     const d=parseInt(box.getAttribute("data-daybox"),10);
     if(!Number.isFinite(d) || d<1) return;
-    const outRow=d*2-1, backRow=d*2;
-    const outMin=travelMinutesForDay(d,"out");
-    const backMin=travelMinutesForDay(d,"back");
-    if(outMin) applyAnfahrtPauseClock(d);
-    if(backMin){
-      const b1=box.querySelector(`[data-k="RZstart${backRow}"]`);
-      const b2=box.querySelector(`[data-k="RZende${backRow}"]`);
-      const pause=box.querySelector(`[data-k="PauseRZ${backRow}"]`);
-      if(b1 && b2 && b1.value)
-        setQuarterTime(b2, addMinutesToTime(b1.value, backMin+pauseMinutes(pause?.value||"0")));
-    }
+    applyAnfahrtPauseClock(d);
+    applyRueckfahrtPauseClock(d);
   });
   if(typeof recalcTimes==="function") recalcTimes();
 }
@@ -1093,6 +1097,34 @@ function applyAnfahrtPauseClock(d){
   }
   const az=box.querySelector(`[data-k="AZstart${outRow}"]`);
   if(az && a2.value && az.dataset.manual!=="1") setQuarterTime(az, a2.value);
+}
+function applyRueckfahrtPauseClock(d){
+  // Same rule as Anfahrt: Pause während Rückfahrt widens the clock span,
+  // Reisezeit netto stays Listenzeit / remembered pure drive.
+  const box=dayBoxEl(d);
+  if(!box) return;
+  const backRow=d*2;
+  const b1=box.querySelector(`[data-k="RZstart${backRow}"]`);
+  const b2=box.querySelector(`[data-k="RZende${backRow}"]`);
+  const pauseEl=box.querySelector(`[data-k="PauseRZ${backRow}"]`);
+  if(!b1 || !b2) return;
+  const pauseMin=pauseMinutes(pauseEl?.value||"0");
+  let backMin=travelMinutesForDay(d,"back");
+  if(backMin>0){
+    box.dataset.pureBackMin=String(backMin);
+  }else if(box.dataset.pureBackMin){
+    backMin=Math.max(0,parseInt(box.dataset.pureBackMin,10)||0);
+  }else if(b1.value && b2.value){
+    backMin=Math.max(0, minutesBetween(b1.value,b2.value)-pauseMin);
+    box.dataset.pureBackMin=String(backMin);
+  }
+  if(!backMin) return;
+  const duration=backMin+pauseMin;
+  if(b1.value){
+    setQuarterTime(b2, addMinutesToTime(b1.value,duration));
+  }else if(b2.value){
+    setQuarterTime(b1, addMinutesToTime(b2.value,-duration));
+  }
 }
 function selectedCompany(){
   const v=$("company")?.value;
@@ -1491,6 +1523,22 @@ function syncVisibleDaysFromDOM(){
   const maxDay=boxes.reduce((m,b)=>Math.max(m,Number(b.getAttribute("data-daybox"))||0),0);
   if(maxDay>0) visibleDays=Math.max(Number(visibleDays)||1,maxDay);
 }
+function dayHasActivity(d){
+  const box=dayBoxEl(d);
+  if(!box) return false;
+  const a=d*2-1,b=d*2;
+  const q=k=>String(box.querySelector(`[data-k="${k}"]`)?.value||"").trim();
+  if(typeof filledTime==="function"){
+    if(filledTime(q(`RZstart${a}`))||filledTime(q(`RZende${a}`))||filledTime(q(`AZstart${a}`))||filledTime(q(`AZende${a}`))||filledTime(q(`RZstart${b}`))||filledTime(q(`RZende${b}`)))
+      return true;
+  }
+  if(q(`Kilometer${a}`)||q(`Kilometer${b}`)) return true;
+  // User-entered pauses (not the default Rückfahrt 45 alone).
+  if(q(`PauseRZ${a}`) && q(`PauseRZ${a}`)!=="0") return true;
+  if(q(`PauseAZ${a}`) && q(`PauseAZ${a}`)!=="0") return true;
+  if(q(`PauseRZ${b}`) && q(`PauseRZ${b}`)!=="0" && q(`PauseRZ${b}`)!=="45") return true;
+  return false;
+}
 function recalcTimes(){
   syncVisibleDaysFromDOM();
   let travel=0,work=0,km=0,pauses=0;
@@ -1521,20 +1569,24 @@ function recalcTimes(){
       rr=Math.max(0,parseInt(backOverride.value,10)||0);
     }else{
       const routeMin=travelMinutesForDay(d,"back");
+      const pureBack=routeMin>0 ? routeMin : Math.max(0,parseInt(box?.dataset.pureBackMin||"0",10)||0);
+      if(routeMin>0 && box) box.dataset.pureBackMin=String(routeMin);
       // Same rule for Rückfahrt: pause changes arrival clock, not netto.
-      rr=routeMin>0 ? routeMin : Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack);
+      rr=pureBack>0 ? pureBack : Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack);
     }
 
     const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseWork);
 
-    const dayPauses=pauseOut+pauseWork+pauseBack;
-    travel+=rt+rr; work+=wt; pauses+=dayPauses;
+    const active=dayHasActivity(d);
+    const dayPauses=active ? (pauseOut+pauseWork+pauseBack) : 0;
+    if(active){ travel+=rt+rr; work+=wt; pauses+=dayPauses; }
     km+=(parseFloat(String(q(`Kilometer${a}`).value).replace(",","."))||0);
     km+=(parseFloat(String(q(`Kilometer${b}`).value).replace(",","."))||0);
 
     const sc=(name,val)=>{const el=box?.querySelector(`[data-calc="${name}"]`)||document.querySelector(`[data-calc="${name}"]`);if(el)el.value=fmtMin(val);};
     // Reise/Arbeit bleiben netto; Gesamtzeit (Tag + unten) inkl. aller Pausen.
-    sc(`rt${d}`,rt); sc(`wt${d}`,wt); sc(`wt2${d}`,wt); sc(`rr${d}`,rr); sc(`total${d}`,rt+wt+rr+dayPauses);
+    // Empty days: show 00:00 even if default Rückfahrt-Pause is 45.
+    sc(`rt${d}`,active?rt:0); sc(`wt${d}`,active?wt:0); sc(`wt2${d}`,active?wt:0); sc(`rr${d}`,active?rr:0); sc(`total${d}`,active?(rt+wt+rr+dayPauses):0);
   }
   if($("travelTotal"))$("travelTotal").value=fmtMin(travel);
   if($("workTotal"))$("workTotal").value=fmtMin(work);
@@ -1588,10 +1640,7 @@ function bindTimeInputs(){
       // Pause must not change Reisezeit netto. On PauseRZ: widen clocks first, then recalc.
       if(isPauseKey){
         if(key===`PauseRZ${outRow}`) applyAnfahrtPauseClock(d);
-        if(key===`PauseRZ${backRow}` && backMin){
-          const b1=field("RZstart",backRow), b2=field("RZende",backRow);
-          if(b1 && b2 && b1.value) setQuarterTime(b2, addMinutesToTime(b1.value, backMin+pauseMinutes(el.value||"0")));
-        }
+        if(key===`PauseRZ${backRow}`) applyRueckfahrtPauseClock(d);
         // PauseAZ only affects Arbeitszeit netto via recalc; clocks unchanged.
         recalcTimes();
         if(typeof updateDayRouteNetto==="function") updateDayRouteNetto(d);
@@ -1688,9 +1737,8 @@ function bindTimeInputs(){
       if(key===`PauseRZ${outRow}` && outMin){
         applyAnfahrtPauseClock(d);
       }
-      if(key===`PauseRZ${backRow}` && backMin){
-        const b1=field("RZstart",backRow), b2=field("RZende",backRow);
-        if(b1 && b2 && b1.value) setQuarterTime(b2, addMinutesToTime(b1.value,backMin+pauseMinutes(el.value||"0")));
+      if(key===`PauseRZ${backRow}`){
+        applyRueckfahrtPauseClock(d);
       }
 
       if(key===`RZende${outRow}`){
@@ -1809,9 +1857,12 @@ for(let d=1;d<=dayBoxes.length;d++){
   const pauseOut=pauseMinutes(q(`PauseRZ${a}`).value||"");
   const pauseWork=pauseMinutes(q(`PauseAZ${a}`).value||"");
   const pauseBack=pauseMinutes(q(`PauseRZ${b}`).value||"");
-  if(pauseOut) setFit(form,`PauseRZ${a}`,fmtMinPdf(pauseOut),6);
-  if(pauseWork) setFit(form,`PauseAZ${a}`,fmtMinPdf(pauseWork),6);
-  if(pauseBack) setFit(form,`PauseRZ${b}`,fmtMinPdf(pauseBack),6);
+  // Do not write default/empty-day pauses onto blank PDF rows.
+  if(hasTimes){
+    if(pauseOut) setFit(form,`PauseRZ${a}`,fmtMinPdf(pauseOut),6);
+    if(pauseWork) setFit(form,`PauseAZ${a}`,fmtMinPdf(pauseWork),6);
+    if(pauseBack) setFit(form,`PauseRZ${b}`,fmtMinPdf(pauseBack),6);
+  }
   const kmA=q(`Kilometer${a}`).value, kmB=q(`Kilometer${b}`).value;
   if(String(kmA).trim()!=="") setFit(form,`Kilometer${a}`,kmA,6.5);
   if(String(kmB).trim()!=="") setFit(form,`Kilometer${b}`,kmB,6.5);
@@ -1825,13 +1876,13 @@ for(let d=1;d<=dayBoxes.length;d++){
   const wt=Math.max(0,minutesBetween(q(`AZstart${a}`).value,q(`AZende${a}`).value)-pauseWork);
   const rr=backOv && String(backOv.value).trim()!==""
     ? Math.max(0,parseInt(backOv.value,10)||0)
-    : (routeBack>0 ? routeBack : Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack));
+    : (routeBack>0 ? routeBack : Math.max(0,parseInt(box.dataset.pureBackMin||"0",10)||0) || Math.max(0,minutesBetween(q(`RZstart${b}`).value,q(`RZende${b}`).value)-pauseBack));
   if(rt) setFit(form,`RZ${a}`,fmtMinPdf(rt),7);
   if(wt) setFit(form,`AZ${a}`,fmtMinPdf(wt),7);
   if(rr) setFit(form,`RZ${b}`,fmtMinPdf(rr),7);
   km+=(parseFloat((kmA||"").replace(",","."))||0);
   km+=(parseFloat((kmB||"").replace(",","."))||0);
-  travel+=rt+rr;work+=wt;pauses+=pauseOut+pauseWork+pauseBack;
+  if(hasTimes){ travel+=rt+rr;work+=wt;pauses+=pauseOut+pauseWork+pauseBack; }
 }
 if(km) setFit(form,"Kilometer gesamt",String(Math.round(km*10)/10).replace(".",","),8);
 // Leer.pdf has no AcroForm fields for Reisezeit/Arbeitszeit/Gesamtzeit gesamt (only Kilometer gesamt).
@@ -1949,16 +2000,22 @@ try{
   const fname=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
   if(typeof shareOrDownloadPdf==="function"){
   const how=await shareOrDownloadPdf(lastPdfBlob, fname);
-    if(how==="shared" || how==="done") $("status").textContent="PDF geteilt – in Dateien sichern.";
+    if(typeof updatePdfHandoffStatus==="function") updatePdfHandoffStatus(how);
+    else if(how==="shared" || how==="done") $("status").textContent="PDF geteilt – in Dateien sichern.";
     else if(how==="saved") $("status").textContent="PDF wurde gespeichert.";
-    else if(how==="aborted") $("status").textContent="Speichern abgebrochen – bitte erneut tippen.";
-    else if(how==="busy" || how==="needs-gesture") $("status").textContent="PDF wird gespeichert…";
+    else if(how==="aborted") $("status").textContent="Speichern abgebrochen – bitte „PDF speichern“ tippen.";
+    else if(how==="busy" || how==="needs-gesture"){
+      if(typeof setSavePdfVisible==="function") setSavePdfVisible(true);
+      $("status").textContent="PDF fertig – bitte „PDF speichern“ tippen.";
+    }
     else $("status").textContent="PDF zum Speichern geöffnet.";
   } else {
     $("status").textContent="Fertig – das PDF ist vorbereitet.";
+    if(typeof setSavePdfVisible==="function") setSavePdfVisible(!!lastPdfBlob);
   }
 }catch(shareErr){
-  $("status").textContent="PDF erstellt – bitte erneut speichern.";
+  $("status").textContent="PDF erstellt – bitte „PDF speichern“ tippen.";
+  if(typeof setSavePdfVisible==="function") setSavePdfVisible(!!lastPdfBlob);
 }
 }catch(e){$("status").textContent="Fehler: "+e.message}
 }finally{
@@ -2528,23 +2585,26 @@ try{
     if(!btn || btn.dataset.saveasBound==="1") return;
     btn.dataset.saveasBound="1";
 
-    // Use the File System Access API where supported (Chrome/Edge on desktop).
-    // On iPad/Safari the native download/share mechanism is used; Safari
-    // decides the destination via its own Files UI.
+    // Fresh user tap – required on iPad after async PDF generation lost the gesture.
     btn.addEventListener("click",async function(){
       if(!lastPdfBlob){
         const status=document.getElementById("status");
         if(status) status.textContent="Bitte zuerst „PDF erstellen“ klicken.";
         return;
       }
+      // Allow retry even if a previous attempt marked this blob done/aborted.
+      pdfHandoffDoneFor=null;
       const defaultName=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
       const how=await shareOrDownloadPdf(lastPdfBlob, defaultName);
-      const status=document.getElementById("status");
-      if(status){
-        if(how==="shared") status.textContent="PDF geteilt – in Dateien sichern.";
-        else if(how==="saved") status.textContent="PDF wurde gespeichert.";
-        else if(how==="aborted") status.textContent="Speichern abgebrochen.";
-        else status.textContent="PDF zum Speichern geöffnet.";
+      if(typeof updatePdfHandoffStatus==="function") updatePdfHandoffStatus(how);
+      else{
+        const status=document.getElementById("status");
+        if(status){
+          if(how==="shared") status.textContent="PDF geteilt – in Dateien sichern.";
+          else if(how==="saved") status.textContent="PDF wurde gespeichert.";
+          else if(how==="aborted") status.textContent="Speichern abgebrochen.";
+          else status.textContent="PDF zum Speichern geöffnet.";
+        }
       }
     });
   }
@@ -2560,6 +2620,35 @@ try{
 
 let pdfHandoffBusy=false;
 let pdfHandoffDoneFor=null;
+function setSavePdfVisible(on){
+  const btn=document.getElementById("savePdf");
+  if(!btn) return;
+  btn.hidden=!on;
+  btn.style.display=on ? "block" : "none";
+}
+function updatePdfHandoffStatus(how){
+  const st=document.getElementById("status");
+  if(!st) return how;
+  if(how==="shared" || how==="done"){
+    setSavePdfVisible(false);
+    st.textContent="PDF geteilt – in Dateien sichern.";
+  }else if(how==="saved"){
+    setSavePdfVisible(false);
+    st.textContent="PDF wurde gespeichert.";
+  }else if(how==="download"){
+    setSavePdfVisible(false);
+    st.textContent="PDF zum Speichern geöffnet.";
+  }else if(how==="aborted"){
+    setSavePdfVisible(!!lastPdfBlob);
+    st.textContent="Speichern abgebrochen – bitte „PDF speichern“ tippen.";
+  }else if(how==="needs-gesture" || how==="busy"){
+    setSavePdfVisible(!!lastPdfBlob);
+    st.textContent="PDF fertig – bitte „PDF speichern“ tippen.";
+  }else if(how===false || how==null){
+    setSavePdfVisible(!!lastPdfBlob);
+  }
+  return how;
+}
 function ensurePdfFileName(filename){
   let name=String(filename||"Servicebericht.pdf").trim()||"Servicebericht.pdf";
   name=name.replace(/[\\/:*?"<>|]+/g,"_");
@@ -2676,19 +2765,23 @@ async function shareOrDownloadPdf(blob, filename){
           return;
         }
         if(typeof lastPdfBlob!=="undefined" && lastPdfBlob){
-          // iPad: second handoff keeps share in a fresh turn if the async
-          // generate path lost the user gesture. Chrome already saved above.
+          // iPad: if generate lost the user gesture, show the explicit save button
+          // instead of silently failing or triggering a second download.
           if(pdfHandoffDoneFor===lastPdfBlob) return;
           const preferShare=/iPad|iPhone|iPod/.test(navigator.userAgent||"")
             || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
           if(!preferShare) return;
           const filename=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
           const how=await shareOrDownloadPdf(lastPdfBlob, filename);
-          if(st){
+          if(typeof updatePdfHandoffStatus==="function") updatePdfHandoffStatus(how);
+          else if(st){
             if(how==="shared" || how==="done") st.textContent="PDF geteilt – in Dateien sichern.";
             else if(how==="saved") st.textContent="PDF wurde gespeichert.";
             else if(how==="aborted") st.textContent="Speichern abgebrochen.";
-            else if(how==="busy" || how==="needs-gesture") return;
+            else if(how==="busy" || how==="needs-gesture"){
+              if(typeof setSavePdfVisible==="function") setSavePdfVisible(true);
+              st.textContent="PDF fertig – bitte „PDF speichern“ tippen.";
+            }
             else st.textContent="PDF zum Speichern geöffnet.";
           }
           return;
@@ -2933,7 +3026,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.22";
+  const APP_VERSION="1.23";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
   const SW_RELOAD_KEY="servicebericht_sw_reload_v1";
