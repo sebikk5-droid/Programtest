@@ -34,6 +34,15 @@ button{flex:1;border:0;border-radius:12px;padding:13px;font-size:16px;font-weigh
 .install-note{background:#eef2ff;border-radius:12px;padding:10px 12px;font-size:13px;margin-top:10px;color:#374151}
 </style>
 <style>
+/* Default Rückfahrt-Pause (45 Min) – visibly highlighted so it is not missed. */
+.daybox input.pause-rueckfahrt,
+input.pause-rueckfahrt{
+  background:#fff6d8 !important;
+  border-color:#e0b94d !important;
+  font-weight:650;
+}
+</style>
+<style>
 .daybox{background:#fff;border-radius:12px;padding:12px;margin:12px 0;border:1px solid #ddd}
 .daybox h3{margin:0 0 10px;font-size:17px}
 .sectiontitle{font-weight:700;margin:12px 0 6px;padding-top:8px;border-top:1px solid #eee}
@@ -242,7 +251,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.21</div>
+      <div class="credit">Created by S. Pawlina v1.22</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -704,7 +713,7 @@ function dayTemplate(d){
       <div class="field"><label>Rückfahrt bis – Ankunft zuhause</label><select class="quarter-time" data-k="RZende${d*2}"></select></div>
     </div>
     <div class="row">
-      <div class="field"><label>Pause während Rückfahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${d*2}" placeholder="Minuten"></div>
+      <div class="field"><label>Pause während Rückfahrt (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-k="PauseRZ${d*2}" value="45" class="pause-rueckfahrt" placeholder="Minuten"></div>
       <div class="field"><label>Reisezeit netto</label><input type="text" data-calc="rr${d}" readonly></div>
       <div class="field"><label>Reisezeit ändern (Minuten)</label><input type="number" min="0" step="1" inputmode="numeric" data-route-override="back" placeholder="z. B. 90"></div>
     </div>
@@ -1118,6 +1127,13 @@ function customerRoute(){
   if(!Array.isArray(companies)) return {km:0,minutes:0};
   return parseRoute(selectedCompany());
 }
+const DEFAULT_RUECKFAHRT_PAUSE="45";
+function ensureRueckfahrtPause(el){
+  // Legacy default from the old app: Pause während Rückfahrt = 45 Min, highlighted.
+  if(!el) return;
+  el.classList.add("pause-rueckfahrt");
+  if(String(el.value||"").trim()==="") el.value=DEFAULT_RUECKFAHRT_PAUSE;
+}
 function applyCustomerRouteDay1(){
   const r=customerRoute();
   const km1=document.querySelector('[data-k="Kilometer1"]');
@@ -1133,6 +1149,7 @@ function applyCustomerRouteDay1(){
   const b1=document.querySelector('[data-k="RZstart2"]');
   const b2=document.querySelector('[data-k="RZende2"]');
   const pauseR=document.querySelector('[data-k="PauseRZ2"]');
+  ensureRueckfahrtPause(pauseR);
 
   if(r.minutes){
     const outOverride=document.querySelector('[data-route-override="out"]');
@@ -1154,8 +1171,8 @@ function applyCustomerRouteDay1(){
 
   const info=document.getElementById("routeInfo1");
   if(info){
-    // Only list km/Fahrzeit — Pause is entered in the fields and must not show a stale "0".
-    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)}`;
+    const pauseShown=pauseMinutes(pauseR?.value||DEFAULT_RUECKFAHRT_PAUSE);
+    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} · Rückfahrt-Pause ${pauseShown} Min`;
   }
   recalcTimes();
 }
@@ -1178,6 +1195,7 @@ function applyCustomerRouteDay(d){
   const b2=box?.querySelector(`[data-k="RZende${2*d}"]`);
   const pauseOut=box?.querySelector(`[data-k="PauseRZ${2*d-1}"]`);
   const pauseR=box?.querySelector(`[data-k="PauseRZ${2*d}"]`);
+  ensureRueckfahrtPause(pauseR);
 
   if(r.minutes){
     const outOverride=box?.querySelector('[data-route-override="out"]');
@@ -1199,7 +1217,8 @@ function applyCustomerRouteDay(d){
 
   const info=box?.querySelector(`#routeInfo${d}`);
   if(info){
-    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)}`;
+    const pauseShown=pauseMinutes(pauseR?.value||DEFAULT_RUECKFAHRT_PAUSE);
+    info.textContent=`Kunde: ${r.km||0} km / ${fmtMin(r.minutes)} · Rückfahrt-Pause ${pauseShown} Min`;
   }
   recalcTimes();
 }
@@ -1904,24 +1923,36 @@ try{
   }
 }catch(e){ console.warn("Bemerkungen:",e); }
 
-// Drop template embedded files (e.g. Content Credentials) so saving the PDF
-// does not create an extra sidecar/attachment file next to the report.
+// Drop template attachments (Content Credentials / Associated Files / metadata)
+// so Chrome/OneDrive/iPad Files do not extract a second sidecar next to the PDF.
 try{
-  const names=pdf.catalog.lookup(PDFLib.PDFName.of("Names"));
-  if(names && names.delete) names.delete(PDFLib.PDFName.of("EmbeddedFiles"));
+  const Names=PDFLib.PDFName.of("Names");
+  const EmbeddedFiles=PDFLib.PDFName.of("EmbeddedFiles");
+  const AF=PDFLib.PDFName.of("AF");
+  const Metadata=PDFLib.PDFName.of("Metadata");
+  if(pdf.catalog.has(Names)){
+    const namesDict=pdf.context.lookup(pdf.catalog.get(Names));
+    if(namesDict && namesDict.delete) namesDict.delete(EmbeddedFiles);
+  }
+  if(pdf.catalog.has(AF)) pdf.catalog.delete(AF);
+  if(pdf.catalog.has(Metadata)) pdf.catalog.delete(Metadata);
+  for(const pg of pdf.getPages()){
+    try{ if(pg.node.has(AF)) pg.node.delete(AF); }catch(e){}
+  }
 }catch(e){}
 
 let out=await pdf.save();
 lastPdfBlob=new Blob([out],{type:"application/pdf"});
+pdfHandoffDoneFor=null; // allow a fresh save for this new PDF
 $("status").textContent="Fertig – PDF wird gespeichert…";
 try{
   const fname=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
   if(typeof shareOrDownloadPdf==="function"){
-    const how=await shareOrDownloadPdf(lastPdfBlob, fname);
+  const how=await shareOrDownloadPdf(lastPdfBlob, fname);
     if(how==="shared" || how==="done") $("status").textContent="PDF geteilt – in Dateien sichern.";
     else if(how==="saved") $("status").textContent="PDF wurde gespeichert.";
     else if(how==="aborted") $("status").textContent="Speichern abgebrochen – bitte erneut tippen.";
-    else if(how==="busy") $("status").textContent="PDF wird bereits gespeichert…";
+    else if(how==="busy" || how==="needs-gesture") $("status").textContent="PDF wird gespeichert…";
     else $("status").textContent="PDF zum Speichern geöffnet.";
   } else {
     $("status").textContent="Fertig – das PDF ist vorbereitet.";
@@ -2589,6 +2620,10 @@ async function shareOrDownloadPdf(blob, filename){
     }
   }catch(e){
     if(e && e.name==="AbortError") return "aborted";
+    // Lost user gesture after async PDF build: do NOT also trigger a download.
+    // installCombined retries share in the next tick with a fresh gesture path.
+    if(e && (e.name==="NotAllowedError" || e.name==="InvalidStateError"))
+      return "needs-gesture";
   }
   try{
     if(window.showSaveFilePicker){
@@ -2643,6 +2678,7 @@ async function shareOrDownloadPdf(blob, filename){
         if(typeof lastPdfBlob!=="undefined" && lastPdfBlob){
           // iPad: second handoff keeps share in a fresh turn if the async
           // generate path lost the user gesture. Chrome already saved above.
+          if(pdfHandoffDoneFor===lastPdfBlob) return;
           const preferShare=/iPad|iPhone|iPod/.test(navigator.userAgent||"")
             || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
           if(!preferShare) return;
@@ -2652,7 +2688,7 @@ async function shareOrDownloadPdf(blob, filename){
             if(how==="shared" || how==="done") st.textContent="PDF geteilt – in Dateien sichern.";
             else if(how==="saved") st.textContent="PDF wurde gespeichert.";
             else if(how==="aborted") st.textContent="Speichern abgebrochen.";
-            else if(how==="busy") return;
+            else if(how==="busy" || how==="needs-gesture") return;
             else st.textContent="PDF zum Speichern geöffnet.";
           }
           return;
@@ -2897,7 +2933,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.21";
+  const APP_VERSION="1.22";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
   const SW_RELOAD_KEY="servicebericht_sw_reload_v1";
