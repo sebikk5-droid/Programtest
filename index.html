@@ -251,7 +251,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.24</div>
+      <div class="credit">Created by S. Pawlina v1.25</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -383,7 +383,6 @@ body.app-locked #appLock{display:flex}
 </div>
 </section>
 <div id="status"></div>
-<button type="button" class="go" id="savePdf" hidden style="width:100%;margin:8px 0 4px;display:none">PDF speichern</button>
 </main>
 <div class="bottom"><button class="clear" onclick="try{sessionStorage.removeItem('servicebericht_pdf_return_v1');localStorage.removeItem('pdf_remarks');Object.keys(localStorage).filter(k=>k.startsWith('choice_')||k.startsWith('pdf_')).forEach(k=>localStorage.removeItem(k));}catch(e){};location.reload()">Zurücksetzen</button><button class="go" id="generate">PDF erstellen & speichern</button></div>
 <script src="vendor/pdf-lib.min.js"></script>
@@ -1961,22 +1960,16 @@ try{
   const fname=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
   if(typeof shareOrDownloadPdf==="function"){
   const how=await shareOrDownloadPdf(lastPdfBlob, fname);
-    if(typeof updatePdfHandoffStatus==="function") updatePdfHandoffStatus(how);
-    else if(how==="shared" || how==="done") $("status").textContent="PDF geteilt – in Dateien sichern.";
+    if(how==="shared" || how==="done") $("status").textContent="PDF geteilt – in Dateien sichern.";
     else if(how==="saved") $("status").textContent="PDF wurde gespeichert.";
-    else if(how==="aborted") $("status").textContent="Speichern abgebrochen – bitte „PDF speichern“ tippen.";
-    else if(how==="busy" || how==="needs-gesture"){
-      if(typeof setSavePdfVisible==="function") setSavePdfVisible(true);
-      $("status").textContent="PDF fertig – bitte „PDF speichern“ tippen.";
-    }
+    else if(how==="aborted") $("status").textContent="Speichern abgebrochen – bitte erneut tippen.";
+    else if(how==="busy" || how==="needs-gesture") $("status").textContent="PDF wird gespeichert…";
     else $("status").textContent="PDF zum Speichern geöffnet.";
   } else {
     $("status").textContent="Fertig – das PDF ist vorbereitet.";
-    if(typeof setSavePdfVisible==="function") setSavePdfVisible(!!lastPdfBlob);
   }
 }catch(shareErr){
-  $("status").textContent="PDF erstellt – bitte „PDF speichern“ tippen.";
-  if(typeof setSavePdfVisible==="function") setSavePdfVisible(!!lastPdfBlob);
+  $("status").textContent="PDF erstellt – bitte erneut speichern.";
 }
 }catch(e){$("status").textContent="Fehler: "+e.message}
 }finally{
@@ -2546,26 +2539,23 @@ try{
     if(!btn || btn.dataset.saveasBound==="1") return;
     btn.dataset.saveasBound="1";
 
-    // Fresh user tap – required on iPad after async PDF generation lost the gesture.
+    // Use the File System Access API where supported (Chrome/Edge on desktop).
+    // On iPad/Safari the native download/share mechanism is used; Safari
+    // decides the destination via its own Files UI.
     btn.addEventListener("click",async function(){
       if(!lastPdfBlob){
         const status=document.getElementById("status");
         if(status) status.textContent="Bitte zuerst „PDF erstellen“ klicken.";
         return;
       }
-      // Allow retry even if a previous attempt marked this blob done/aborted.
-      pdfHandoffDoneFor=null;
       const defaultName=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
       const how=await shareOrDownloadPdf(lastPdfBlob, defaultName);
-      if(typeof updatePdfHandoffStatus==="function") updatePdfHandoffStatus(how);
-      else{
-        const status=document.getElementById("status");
-        if(status){
-          if(how==="shared") status.textContent="PDF geteilt – in Dateien sichern.";
-          else if(how==="saved") status.textContent="PDF wurde gespeichert.";
-          else if(how==="aborted") status.textContent="Speichern abgebrochen.";
-          else status.textContent="PDF zum Speichern geöffnet.";
-        }
+      const status=document.getElementById("status");
+      if(status){
+        if(how==="shared") status.textContent="PDF geteilt – in Dateien sichern.";
+        else if(how==="saved") status.textContent="PDF wurde gespeichert.";
+        else if(how==="aborted") status.textContent="Speichern abgebrochen.";
+        else status.textContent="PDF zum Speichern geöffnet.";
       }
     });
   }
@@ -2581,35 +2571,6 @@ try{
 
 let pdfHandoffBusy=false;
 let pdfHandoffDoneFor=null;
-function setSavePdfVisible(on){
-  const btn=document.getElementById("savePdf");
-  if(!btn) return;
-  btn.hidden=!on;
-  btn.style.display=on ? "block" : "none";
-}
-function updatePdfHandoffStatus(how){
-  const st=document.getElementById("status");
-  if(!st) return how;
-  if(how==="shared" || how==="done"){
-    setSavePdfVisible(false);
-    st.textContent="PDF geteilt – in Dateien sichern.";
-  }else if(how==="saved"){
-    setSavePdfVisible(false);
-    st.textContent="PDF wurde gespeichert.";
-  }else if(how==="download"){
-    setSavePdfVisible(false);
-    st.textContent="PDF zum Speichern geöffnet.";
-  }else if(how==="aborted"){
-    setSavePdfVisible(!!lastPdfBlob);
-    st.textContent="Speichern abgebrochen – bitte „PDF speichern“ tippen.";
-  }else if(how==="needs-gesture" || how==="busy"){
-    setSavePdfVisible(!!lastPdfBlob);
-    st.textContent="PDF fertig – bitte „PDF speichern“ tippen.";
-  }else if(how===false || how==null){
-    setSavePdfVisible(!!lastPdfBlob);
-  }
-  return how;
-}
 function ensurePdfFileName(filename){
   let name=String(filename||"Servicebericht.pdf").trim()||"Servicebericht.pdf";
   name=name.replace(/[\\/:*?"<>|]+/g,"_");
@@ -2726,23 +2687,19 @@ async function shareOrDownloadPdf(blob, filename){
           return;
         }
         if(typeof lastPdfBlob!=="undefined" && lastPdfBlob){
-          // iPad: if generate lost the user gesture, show the explicit save button
-          // instead of silently failing or triggering a second download.
+          // iPad: second handoff keeps share in a fresh turn if the async
+          // generate path lost the user gesture. Chrome already saved above.
           if(pdfHandoffDoneFor===lastPdfBlob) return;
           const preferShare=/iPad|iPhone|iPod/.test(navigator.userAgent||"")
             || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
           if(!preferShare) return;
           const filename=typeof pdfFileName==="function" ? pdfFileName() : "Servicebericht.pdf";
           const how=await shareOrDownloadPdf(lastPdfBlob, filename);
-          if(typeof updatePdfHandoffStatus==="function") updatePdfHandoffStatus(how);
-          else if(st){
+          if(st){
             if(how==="shared" || how==="done") st.textContent="PDF geteilt – in Dateien sichern.";
             else if(how==="saved") st.textContent="PDF wurde gespeichert.";
             else if(how==="aborted") st.textContent="Speichern abgebrochen.";
-            else if(how==="busy" || how==="needs-gesture"){
-              if(typeof setSavePdfVisible==="function") setSavePdfVisible(true);
-              st.textContent="PDF fertig – bitte „PDF speichern“ tippen.";
-            }
+            else if(how==="busy" || how==="needs-gesture") return;
             else st.textContent="PDF zum Speichern geöffnet.";
           }
           return;
@@ -2987,7 +2944,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.24";
+  const APP_VERSION="1.25";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
   const SW_RELOAD_KEY="servicebericht_sw_reload_v1";
