@@ -1,7 +1,9 @@
-const CACHE_NAME = "servicebericht-v1-20";
-const APP_SHELL = [
+const CACHE_NAME = "servicebericht-v1-21";
+const APP_SHELL_CRITICAL = [
   "./index.html",
-  "./manifest.webmanifest",
+  "./manifest.webmanifest"
+];
+const APP_SHELL_LAZY = [
   "./Leer.pdf",
   "./vendor/pdf-lib.min.js",
   "./icons/icon-192.png",
@@ -9,7 +11,6 @@ const APP_SHELL = [
   "./icons/icon-180.png"
 ];
 
-// Large/static assets can stay cache-first; everything else prefers network.
 function isStaticAsset(url){
   const p = url.pathname;
   return (
@@ -24,12 +25,45 @@ function isStaticAsset(url){
   );
 }
 
+// Promise.race timeout – more reliable on older iOS Safari than AbortController alone.
+function fetchWithTimeout(request, ms){
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    fetch(request, {cache:"no-store"})
+      .then(res => { clearTimeout(timer); resolve(res); })
+      .catch(err => { clearTimeout(timer); reject(err); });
+  });
+}
+
+async function putInCache(request, response){
+  try{
+    if(!response || !response.ok) return;
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(request, response.clone());
+  }catch(e){}
+}
+
+async function matchHtml(){
+  return (await caches.match("./index.html"))
+    || (await caches.match("index.html"))
+    || (await caches.match("./"));
+}
+
+function offlineHtml(){
+  return new Response("Servicebericht offline – bitte erneut laden.", {
+    status:503,
+    headers:{"Content-Type":"text/plain; charset=utf-8"}
+  });
+}
+
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    // Prefer per-file add so one missing asset does not break the whole SW install.
-    await Promise.all(APP_SHELL.map(url => cache.add(url).catch(() => null)));
+    // Critical shell first so the app can open even if PDF/pdf-lib is slow.
+    await Promise.all(APP_SHELL_CRITICAL.map(url => cache.add(url).catch(() => null)));
     await self.skipWaiting();
+    // Large assets in background – do not block activation/start.
+    APP_SHELL_LAZY.forEach(url => { cache.add(url).catch(() => null); });
   })());
 });
 
@@ -52,53 +86,77 @@ self.addEventListener("fetch", event => {
   if(req.method !== "GET") return;
 
   const url = new URL(req.url);
-  // Never cache the service worker script itself through Cache API.
+  if(url.origin !== self.location.origin) return;
+
+  // Never let SW script updates hang on Cache API.
   if(url.pathname.endsWith("/sw.js")){
-    event.respondWith(fetch(req, {cache:"no-store"}).catch(() => caches.match(req)));
-    return;
-  }
-
-  const networkFirst =
-    req.mode === "navigate" ||
-    url.pathname.endsWith("/index.html") ||
-    url.pathname.endsWith("/") ||
-    url.pathname.endsWith("/manifest.webmanifest") ||
-    !isStaticAsset(url);
-
-  if(networkFirst){
     event.respondWith(
-      fetch(req, {cache:"no-store"})
-        .then(res => {
-          if(res && res.ok){
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(()=>{});
-          }
-          return res;
-        })
-        .catch(() => caches.match(req).then(cached => cached || caches.match("./index.html")))
+      fetchWithTimeout(req, 4000).catch(() => caches.match(req).then(c => c || offlineHtml()))
     );
     return;
   }
 
-  // Cache-first only for heavy static binaries (PDF, icons, pdf-lib).
-  event.respondWith(
-    caches.match(req).then(cached => {
-      if(cached){
-        // Soft refresh in background so the next open is fresh.
-        fetch(req).then(res => {
+  const isHtml =
+    req.mode === "navigate" ||
+    url.pathname.endsWith("/index.html") ||
+    url.pathname.endsWith("/") ||
+    url.pathname.endsWith("/Programtest") ||
+    url.pathname.endsWith("/Programtest/");
+
+  if(isHtml || url.pathname.endsWith("/manifest.webmanifest")){
+    event.respondWith((async () => {
+      // Instant open from cache when available (prevents iPad "loading forever").
+      const cached = isHtml
+        ? await matchHtml()
+        : (await caches.match(req));
+
+      const network = fetchWithTimeout(req, 3500)
+        .then(async res => {
           if(res && res.ok){
-            caches.open(CACHE_NAME).then(c => c.put(req, res)).catch(()=>{});
+            await putInCache(isHtml ? "./index.html" : req, res);
           }
-        }).catch(()=>{});
+          return res;
+        })
+        .catch(() => null);
+
+      if(cached){
+        // Refresh cache in background; return cached page immediately.
+        network.then(() => {}).catch(() => {});
         return cached;
       }
-      return fetch(req).then(res => {
-        if(res && res.ok){
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(()=>{});
-        }
+
+      const fresh = await network;
+      if(fresh) return fresh;
+      return (await matchHtml()) || offlineHtml();
+    })());
+    return;
+  }
+
+  if(isStaticAsset(url)){
+    event.respondWith((async () => {
+      const cached = await caches.match(req);
+      if(cached){
+        fetchWithTimeout(req, 8000).then(res => putInCache(req, res)).catch(()=>{});
+        return cached;
+      }
+      try{
+        const res = await fetchWithTimeout(req, 8000);
+        await putInCache(req, res);
         return res;
-      });
-    })
+      }catch(e){
+        return offlineHtml();
+      }
+    })());
+    return;
+  }
+
+  // Default: short network attempt, then cache.
+  event.respondWith(
+    fetchWithTimeout(req, 4000)
+      .then(async res => {
+        await putInCache(req, res);
+        return res;
+      })
+      .catch(() => caches.match(req).then(c => c || offlineHtml()))
   );
 });

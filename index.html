@@ -242,7 +242,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.20</div>
+      <div class="credit">Created by S. Pawlina v1.21</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -2897,21 +2897,16 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.20";
+  const APP_VERSION="1.21";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
   const SW_RELOAD_KEY="servicebericht_sw_reload_v1";
 
   try{
-    const prev=localStorage.getItem(VERSION_KEY);
-    if(prev && prev!==APP_VERSION){
-      // Drop old Cache Storage entries so a stuck SW cannot keep an old shell.
-      if("caches" in window){
-        caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).catch(function(){});
-      }
-    }
     localStorage.setItem(VERSION_KEY, APP_VERSION);
   }catch(e){}
+  // Do NOT wipe Cache Storage on version bump here – that caused blank hangs
+  // when the network-first SW waited on a slow GitHub Pages response.
 
   function saveSwDraft(){
     try{
@@ -2971,13 +2966,13 @@ async function shareOrDownloadPdf(blob, filename){
 
   navigator.serviceWorker.addEventListener("controllerchange", function(){
     if(refreshing) return;
-    refreshing=true;
-    saveSwDraft();
     // Prevent endless reload loops on iPad after SW updates.
     try{
       if(sessionStorage.getItem(SW_RELOAD_KEY)===APP_VERSION) return;
       sessionStorage.setItem(SW_RELOAD_KEY, APP_VERSION);
     }catch(e){}
+    refreshing=true;
+    saveSwDraft();
     location.reload();
   });
 
