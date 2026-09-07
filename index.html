@@ -207,9 +207,15 @@ body.app-locked #appLock{display:flex}
 .app-lock-card .lock-note{font-size:13px;color:#666;margin:0 0 14px;line-height:1.35}
 .app-lock-card label{margin-top:0}
 .app-lock-card input[type=password]{letter-spacing:.08em}
-.app-lock-actions{display:flex;gap:8px;margin-top:14px}
-.app-lock-actions button{flex:1}
+.app-lock-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.app-lock-actions button{flex:1;min-width:120px}
+.app-lock-bio{
+  border:1px solid #c5d0db;background:#f4f7fa;color:#163a5c;
+  border-radius:12px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;
+}
+.app-lock-bio[disabled]{opacity:.45;cursor:default}
 .app-lock-error{min-height:18px;margin-top:8px;font-size:13px;color:#b00020}
+.app-lock-bio-note{margin:8px 0 0;font-size:12px;color:#777;line-height:1.35}
 .header-lock-btn{
   border:0;background:#eef2f6;color:#163a5c;
   border-radius:9px;padding:6px 10px;font-size:12px;font-weight:700;
@@ -221,12 +227,14 @@ body.app-locked #appLock{display:flex}
 <div id="appLock" role="dialog" aria-modal="true" aria-labelledby="appLockTitle">
   <div class="app-lock-card">
     <h1 id="appLockTitle">Servicebericht</h1>
-    <p class="lock-note">Bitte Passwort eingeben, um die App zu öffnen.</p>
+    <p class="lock-note">Passwort oder Touch&nbsp;ID / Face&nbsp;ID zum Öffnen.</p>
     <label for="appLockPassword">Passwort</label>
     <input id="appLockPassword" type="password" autocomplete="current-password" enterkeyhint="go">
     <div class="app-lock-actions">
       <button type="button" class="go" id="appLockSubmit">Entsperren</button>
+      <button type="button" class="app-lock-bio" id="appLockBio" hidden>Touch&nbsp;ID</button>
     </div>
+    <p class="app-lock-bio-note" id="appLockBioNote" hidden></p>
     <div class="app-lock-error" id="appLockError" aria-live="polite"></div>
   </div>
 </div>
@@ -234,7 +242,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.18</div>
+      <div class="credit">Created by S. Pawlina v1.19</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -2665,6 +2673,7 @@ async function shareOrDownloadPdf(blob, filename){
   // Passwort hier ändern. Hinweis: Client-Schutz gegen normales Öffnen, nicht gegen IT-Analyse.
   const APP_PASSWORD="Service2026";
   const UNLOCK_KEY="servicebericht_unlocked_v1";
+  const BIO_CRED_KEY="servicebericht_webauthn_cred_v1";
 
   function isUnlocked(){
     try{ return sessionStorage.getItem(UNLOCK_KEY)==="1"; }catch(e){ return false; }
@@ -2675,6 +2684,71 @@ async function shareOrDownloadPdf(blob, filename){
       else sessionStorage.removeItem(UNLOCK_KEY);
     }catch(e){}
   }
+  function b64urlFromBuf(buf){
+    const bytes=buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf.buffer||buf);
+    let s="";
+    for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  }
+  function bufFromB64url(str){
+    const pad=str.length%4===0 ? "" : "=".repeat(4-(str.length%4));
+    const b64=(str+pad).replace(/-/g,"+").replace(/_/g,"/");
+    const bin=atob(b64);
+    const out=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+    return out.buffer;
+  }
+  function getStoredCredId(){
+    try{ return localStorage.getItem(BIO_CRED_KEY)||""; }catch(e){ return ""; }
+  }
+  function setStoredCredId(id){
+    try{
+      if(id) localStorage.setItem(BIO_CRED_KEY, id);
+      else localStorage.removeItem(BIO_CRED_KEY);
+    }catch(e){}
+  }
+  function bioSupported(){
+    return !!(window.PublicKeyCredential
+      && typeof navigator.credentials?.create==="function"
+      && typeof navigator.credentials?.get==="function"
+      && window.isSecureContext);
+  }
+  async function platformBioAvailable(){
+    if(!bioSupported()) return false;
+    try{
+      if(typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable==="function"){
+        return !!(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
+      }
+    }catch(e){}
+    return true;
+  }
+  function setError(msg){
+    const err=document.getElementById("appLockError");
+    if(err) err.textContent=msg||"";
+  }
+  function updateBioUi(){
+    const bioBtn=document.getElementById("appLockBio");
+    const note=document.getElementById("appLockBioNote");
+    if(!bioBtn) return;
+    platformBioAvailable().then(ok=>{
+      if(!ok){
+        bioBtn.hidden=true;
+        if(note){ note.hidden=true; note.textContent=""; }
+        return;
+      }
+      bioBtn.hidden=false;
+      const enrolled=!!getStoredCredId();
+      bioBtn.textContent=enrolled ? "Touch ID" : "Touch ID einrichten";
+      if(note){
+        note.hidden=false;
+        note.textContent=enrolled
+          ? "Schnell entsperren mit Touch ID / Face ID. Passwort bleibt als Fallback."
+          : "Einmal Passwort eingeben und „Touch ID einrichten“ tippen.";
+      }
+    }).catch(()=>{
+      bioBtn.hidden=true;
+    });
+  }
   function showApp(unlocked){
     document.body.classList.toggle("app-locked", !unlocked);
     const err=document.getElementById("appLockError");
@@ -2682,21 +2756,115 @@ async function shareOrDownloadPdf(blob, filename){
     if(err) err.textContent="";
     if(!unlocked && pw){
       pw.value="";
-      setTimeout(()=>pw.focus(),50);
+      updateBioUi();
+      setTimeout(()=>{
+        const enrolled=!!getStoredCredId();
+        if(enrolled) document.getElementById("appLockBio")?.focus();
+        else pw.focus();
+      },50);
+      // Auto-prompt Touch ID when already enrolled.
+      if(getStoredCredId()){
+        setTimeout(()=>{ tryBioUnlock({silentAbort:true}); },350);
+      }
+    }
+  }
+  function unlockSuccess(){
+    setUnlocked(true);
+    const pw=document.getElementById("appLockPassword");
+    if(pw) pw.value="";
+    showApp(true);
+  }
+  function passwordOk(){
+    const pw=document.getElementById("appLockPassword");
+    return String(pw?.value||"")===APP_PASSWORD;
+  }
+  async function enrollBio(){
+    if(!bioSupported()) throw new Error("Touch ID wird hier nicht unterstützt.");
+    const challenge=crypto.getRandomValues(new Uint8Array(32));
+    const userId=new TextEncoder().encode("servicebericht-local-user");
+    const cred=await navigator.credentials.create({
+      publicKey:{
+        challenge,
+        rp:{ name:"Servicebericht", id:location.hostname },
+        user:{
+          id:userId,
+          name:"servicebericht",
+          displayName:"Servicebericht"
+        },
+        pubKeyCredParams:[
+          {type:"public-key", alg:-7},
+          {type:"public-key", alg:-257}
+        ],
+        authenticatorSelection:{
+          authenticatorAttachment:"platform",
+          userVerification:"required",
+          residentKey:"preferred"
+        },
+        timeout:60000
+      }
+    });
+    if(!cred || !cred.rawId) throw new Error("Touch ID konnte nicht eingerichtet werden.");
+    setStoredCredId(b64urlFromBuf(cred.rawId));
+  }
+  async function tryBioUnlock(opts){
+    const silentAbort=!!(opts&&opts.silentAbort);
+    setError("");
+    const bioBtn=document.getElementById("appLockBio");
+    if(bioBtn) bioBtn.disabled=true;
+    try{
+      if(!bioSupported()) throw new Error("Touch ID nicht verfügbar.");
+      let credId=getStoredCredId();
+      if(!credId){
+        if(!passwordOk()){
+          setError("Zum Einrichten zuerst das Passwort eingeben.");
+          document.getElementById("appLockPassword")?.focus();
+          return;
+        }
+        await enrollBio();
+        unlockSuccess();
+        return;
+      }
+      const challenge=crypto.getRandomValues(new Uint8Array(32));
+      const assertion=await navigator.credentials.get({
+        publicKey:{
+          challenge,
+          allowCredentials:[{
+            type:"public-key",
+            id:bufFromB64url(credId),
+            transports:["internal"]
+          }],
+          userVerification:"required",
+          timeout:60000
+        }
+      });
+      if(!assertion) throw new Error("Touch ID abgebrochen.");
+      unlockSuccess();
+    }catch(e){
+      if(e && e.name==="NotAllowedError"){
+        if(!silentAbort) setError("Touch ID abgebrochen oder nicht erkannt.");
+        return;
+      }
+      if(e && (e.name==="InvalidStateError" || /credential/i.test(String(e.message||"")))){
+        setStoredCredId("");
+        updateBioUi();
+        if(!silentAbort) setError("Touch ID neu einrichten: Passwort eingeben, dann „Touch ID einrichten“.");
+        return;
+      }
+      if(!silentAbort) setError(e?.message || "Touch ID fehlgeschlagen.");
+    }finally{
+      if(bioBtn) bioBtn.disabled=false;
+      updateBioUi();
     }
   }
   function tryUnlock(){
-    const pw=document.getElementById("appLockPassword");
-    const err=document.getElementById("appLockError");
-    const value=String(pw?.value||"");
-    if(value!==APP_PASSWORD){
-      if(err) err.textContent="Falsches Passwort.";
+    setError("");
+    if(!passwordOk()){
+      setError("Falsches Passwort.");
+      const pw=document.getElementById("appLockPassword");
       if(pw){ pw.value=""; pw.focus(); }
       return;
     }
-    setUnlocked(true);
-    if(pw) pw.value="";
-    showApp(true);
+    unlockSuccess();
   }
   function lockNow(){
     setUnlocked(false);
@@ -2704,7 +2872,9 @@ async function shareOrDownloadPdf(blob, filename){
   }
   function initLock(){
     showApp(isUnlocked());
+    updateBioUi();
     document.getElementById("appLockSubmit")?.addEventListener("click", tryUnlock);
+    document.getElementById("appLockBio")?.addEventListener("click", ()=>tryBioUnlock({silentAbort:false}));
     document.getElementById("appLockNow")?.addEventListener("click", lockNow);
     document.getElementById("appLockPassword")?.addEventListener("keydown", e=>{
       if(e.key==="Enter"){
@@ -2722,7 +2892,7 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.18";
+  const APP_VERSION="1.19";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
 
