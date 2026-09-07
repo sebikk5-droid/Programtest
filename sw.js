@@ -1,6 +1,5 @@
-const CACHE_NAME = "servicebericht-v1-19";
+const CACHE_NAME = "servicebericht-v1-20";
 const APP_SHELL = [
-  "./",
   "./index.html",
   "./manifest.webmanifest",
   "./Leer.pdf",
@@ -26,11 +25,12 @@ function isStaticAsset(url){
 }
 
 self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    // Prefer per-file add so one missing asset does not break the whole SW install.
+    await Promise.all(APP_SHELL.map(url => cache.add(url).catch(() => null)));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", event => {

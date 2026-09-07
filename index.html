@@ -242,7 +242,7 @@ body.app-locked #appLock{display:flex}
   <div class="header-top">
     <h1>Servicebericht</h1>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto">
-      <div class="credit">Created by S. Pawlina v1.19</div>
+      <div class="credit">Created by S. Pawlina v1.20</div>
       <button type="button" class="header-lock-btn" id="appLockNow" title="App sperren">Sperren</button>
     </div>
   </div>
@@ -2756,16 +2756,9 @@ async function shareOrDownloadPdf(blob, filename){
     if(err) err.textContent="";
     if(!unlocked && pw){
       pw.value="";
-      updateBioUi();
-      setTimeout(()=>{
-        const enrolled=!!getStoredCredId();
-        if(enrolled) document.getElementById("appLockBio")?.focus();
-        else pw.focus();
-      },50);
-      // Auto-prompt Touch ID when already enrolled.
-      if(getStoredCredId()){
-        setTimeout(()=>{ tryBioUnlock({silentAbort:true}); },350);
-      }
+      try{ updateBioUi(); }catch(e){}
+      // Do NOT auto-start Touch ID: iOS Safari needs a real tap (user gesture).
+      setTimeout(()=>{ try{ pw.focus(); }catch(e){} },50);
     }
   }
   function unlockSuccess(){
@@ -2782,27 +2775,31 @@ async function shareOrDownloadPdf(blob, filename){
     if(!bioSupported()) throw new Error("Touch ID wird hier nicht unterstützt.");
     const challenge=crypto.getRandomValues(new Uint8Array(32));
     const userId=new TextEncoder().encode("servicebericht-local-user");
-    const cred=await navigator.credentials.create({
-      publicKey:{
-        challenge,
-        rp:{ name:"Servicebericht", id:location.hostname },
-        user:{
-          id:userId,
-          name:"servicebericht",
-          displayName:"Servicebericht"
-        },
-        pubKeyCredParams:[
-          {type:"public-key", alg:-7},
-          {type:"public-key", alg:-257}
-        ],
-        authenticatorSelection:{
-          authenticatorAttachment:"platform",
-          userVerification:"required",
-          residentKey:"preferred"
-        },
-        timeout:60000
-      }
-    });
+    const publicKey={
+      challenge,
+      rp:{ name:"Servicebericht" },
+      user:{
+        id:userId,
+        name:"servicebericht",
+        displayName:"Servicebericht"
+      },
+      pubKeyCredParams:[
+        {type:"public-key", alg:-7},
+        {type:"public-key", alg:-257}
+      ],
+      authenticatorSelection:{
+        authenticatorAttachment:"platform",
+        userVerification:"required",
+        residentKey:"preferred"
+      },
+      timeout:60000
+    };
+    // Prefer current host as rpId when valid; omit on failure (Safari/PWA quirks).
+    try{
+      if(location.hostname && location.hostname!=="localhost")
+        publicKey.rp.id=location.hostname;
+    }catch(e){}
+    const cred=await navigator.credentials.create({publicKey});
     if(!cred || !cred.rawId) throw new Error("Touch ID konnte nicht eingerichtet werden.");
     setStoredCredId(b64urlFromBuf(cred.rawId));
   }
@@ -2853,7 +2850,7 @@ async function shareOrDownloadPdf(blob, filename){
       if(!silentAbort) setError(e?.message || "Touch ID fehlgeschlagen.");
     }finally{
       if(bioBtn) bioBtn.disabled=false;
-      updateBioUi();
+      try{ updateBioUi(); }catch(e){}
     }
   }
   function tryUnlock(){
@@ -2871,17 +2868,25 @@ async function shareOrDownloadPdf(blob, filename){
     showApp(false);
   }
   function initLock(){
-    showApp(isUnlocked());
-    updateBioUi();
-    document.getElementById("appLockSubmit")?.addEventListener("click", tryUnlock);
-    document.getElementById("appLockBio")?.addEventListener("click", ()=>tryBioUnlock({silentAbort:false}));
-    document.getElementById("appLockNow")?.addEventListener("click", lockNow);
-    document.getElementById("appLockPassword")?.addEventListener("keydown", e=>{
-      if(e.key==="Enter"){
-        e.preventDefault();
-        tryUnlock();
-      }
-    });
+    try{
+      showApp(isUnlocked());
+      updateBioUi();
+      document.getElementById("appLockSubmit")?.addEventListener("click", tryUnlock);
+      document.getElementById("appLockBio")?.addEventListener("click", ()=>tryBioUnlock({silentAbort:false}));
+      document.getElementById("appLockNow")?.addEventListener("click", lockNow);
+      document.getElementById("appLockPassword")?.addEventListener("keydown", e=>{
+        if(e.key==="Enter"){
+          e.preventDefault();
+          tryUnlock();
+        }
+      });
+    }catch(e){
+      // Password lock must still work even if Touch ID setup fails.
+      try{
+        document.body.classList.toggle("app-locked", !isUnlocked());
+        document.getElementById("appLockSubmit")?.addEventListener("click", tryUnlock);
+      }catch(err){}
+    }
   }
   if(document.readyState==="loading")
     document.addEventListener("DOMContentLoaded", initLock);
@@ -2892,9 +2897,10 @@ async function shareOrDownloadPdf(blob, filename){
 <script>
 (function(){
   // Single place to bump when shipping UI fixes – iPad reloads once when SW updates.
-  const APP_VERSION="1.19";
+  const APP_VERSION="1.20";
   const VERSION_KEY="servicebericht_app_version_v1";
   const SW_DRAFT_KEY="servicebericht_sw_draft_v1";
+  const SW_RELOAD_KEY="servicebericht_sw_reload_v1";
 
   try{
     const prev=localStorage.getItem(VERSION_KEY);
@@ -2967,6 +2973,11 @@ async function shareOrDownloadPdf(blob, filename){
     if(refreshing) return;
     refreshing=true;
     saveSwDraft();
+    // Prevent endless reload loops on iPad after SW updates.
+    try{
+      if(sessionStorage.getItem(SW_RELOAD_KEY)===APP_VERSION) return;
+      sessionStorage.setItem(SW_RELOAD_KEY, APP_VERSION);
+    }catch(e){}
     location.reload();
   });
 
